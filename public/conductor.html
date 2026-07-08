@@ -106,6 +106,35 @@
   .presenceRole{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-left:auto; }
   .presenceEmpty{ color:var(--text-dim); font-size:13px; padding:8px 0; }
 
+  .uploadForm{
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:6px;
+  }
+  .uploadForm select, .uploadForm input[type="text"]{
+    padding:8px 10px; font-size:13px; color:var(--text); background:rgba(255,255,255,0.05);
+    border:1px solid var(--border); border-radius:8px; outline:none; font-family:inherit;
+  }
+  .uploadForm select option{ color:#1a1006; }
+  .uploadForm input[type="file"]{ font-size:12px; color:var(--text-dim); max-width:220px; }
+  .uploadForm button{
+    padding:8px 16px; font-size:13px; font-weight:600; color:#1a1006;
+    background:linear-gradient(135deg,var(--amber-light),var(--amber)); border:none; border-radius:8px; cursor:pointer;
+  }
+  .uploadForm button:disabled{ opacity:0.5; cursor:default; }
+
+  .libGroup{ margin-top:18px; }
+  .libGroupTitle{ font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px; }
+  .libItem{
+    display:flex; align-items:center; gap:10px; padding:7px 10px; font-size:13px;
+    border-bottom:1px solid var(--border);
+  }
+  .libItem:last-child{ border-bottom:none; }
+  .libItemLabel{ flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .libDelete{
+    width:24px; height:24px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,0.04);
+    color:#e07a6b; cursor:pointer; font-size:14px; line-height:1; flex-shrink:0;
+  }
+  .libDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
+
   .toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
     background:rgba(20,14,8,0.95); border:1px solid var(--border); color:var(--text);
@@ -157,6 +186,27 @@
     <h2>Trigger a whisper</h2>
     <div id="whisperGroups"></div>
   </div>
+
+  <div class="panel">
+    <h2>Audio Library</h2>
+    <p class="scopeNote" style="margin-bottom:14px;">Upload or remove clips for any layer — whispers, moods, or venue ambiences.</p>
+
+    <div class="uploadForm">
+      <select id="uploadLayer">
+        <option value="whisper">Whisper (per role)</option>
+        <option value="mood">Mood (shared)</option>
+        <option value="ambience">Ambience (per venue)</option>
+      </select>
+      <select id="uploadRole"></select>
+      <select id="uploadVenue" style="display:none;"></select>
+      <input type="text" id="uploadMoodKey" placeholder="mood key (e.g. tense)" style="display:none;">
+      <input type="file" id="uploadFile" accept="audio/*">
+      <button id="uploadBtn">Upload</button>
+    </div>
+    <div class="panelMsg" id="uploadMsg"></div>
+
+    <div id="libraryList"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -178,6 +228,14 @@
   var presenceList = document.getElementById('presenceList');
   var targetBar = document.getElementById('targetBar');
   var toast = document.getElementById('toast');
+  var uploadLayer = document.getElementById('uploadLayer');
+  var uploadRole = document.getElementById('uploadRole');
+  var uploadVenue = document.getElementById('uploadVenue');
+  var uploadMoodKey = document.getElementById('uploadMoodKey');
+  var uploadFile = document.getElementById('uploadFile');
+  var uploadBtn = document.getElementById('uploadBtn');
+  var uploadMsg = document.getElementById('uploadMsg');
+  var libraryList = document.getElementById('libraryList');
 
   var adminKey = null;
   var assets = [];
@@ -185,6 +243,20 @@
   var people = [];
   var focused = null; // { code, name } or null = targeting everyone
   var presenceTimer = null;
+
+  var ROLES = ['merchant','traveler','translator','innkeeper','guard','storyteller','pilgrim','caravan-guide','spice-trader','messenger'];
+  var VENUES = [['yildiz-museum','Yıldız Museum'],['catalhoyuk','Çatalhöyük'],['ciurlionis','Čiurlionis Museum'],['fondazione-ago','Fondazione AGO']];
+  ROLES.forEach(function(r){ var o = document.createElement('option'); o.value = r; o.textContent = r; uploadRole.appendChild(o); });
+  VENUES.forEach(function(v){ var o = document.createElement('option'); o.value = v[0]; o.textContent = v[1]; uploadVenue.appendChild(o); });
+
+  function updateUploadFields(){
+    var layer = uploadLayer.value;
+    uploadRole.style.display = layer === 'whisper' ? '' : 'none';
+    uploadVenue.style.display = layer === 'ambience' ? '' : 'none';
+    uploadMoodKey.style.display = layer === 'mood' ? '' : 'none';
+  }
+  uploadLayer.addEventListener('change', updateUploadFields);
+  updateUploadFields();
 
   function showToast(msg){
     toast.textContent = msg;
@@ -196,8 +268,10 @@
     opts = opts || {};
     opts.headers = Object.assign({ 'x-admin-key': adminKey }, opts.headers || {});
     return fetch(path, opts).then(function(r){
-      if (!r.ok) throw new Error('request failed');
-      return r.json();
+      return r.json().catch(function(){ return {}; }).then(function(data){
+        if (!r.ok) throw new Error(data.error || 'request failed');
+        return data;
+      });
     });
   }
 
@@ -329,6 +403,100 @@
     });
   }
 
+  function renderLibrary(){
+    var groups = [
+      { title: 'Whispers', items: assets.filter(function(a){ return a.layer === 'whisper'; }), sub: function(a){ return a.role; } },
+      { title: 'Moods', items: assets.filter(function(a){ return a.layer === 'mood'; }), sub: function(a){ return a.mood_key; } },
+      { title: 'Ambiences', items: assets.filter(function(a){ return a.layer === 'ambience'; }), sub: function(a){ return a.venue; } }
+    ];
+    libraryList.innerHTML = '';
+    groups.forEach(function(g){
+      if (!g.items.length) return;
+      var bySub = {};
+      g.items.forEach(function(a){ var k = g.sub(a) || '—'; bySub[k] = bySub[k] || []; bySub[k].push(a); });
+      var wrap = document.createElement('div');
+      wrap.className = 'libGroup';
+      var title = document.createElement('div');
+      title.className = 'libGroupTitle';
+      title.textContent = g.title;
+      wrap.appendChild(title);
+      Object.keys(bySub).sort().forEach(function(sub){
+        bySub[sub].forEach(function(a){
+          var row = document.createElement('div');
+          row.className = 'libItem';
+          var label = document.createElement('div');
+          label.className = 'libItemLabel';
+          label.textContent = sub + ' — ' + a.label;
+          var del = document.createElement('button');
+          del.className = 'libDelete';
+          del.textContent = '×';
+          del.title = 'Delete';
+          del.addEventListener('click', function(){ deleteAsset(a.id); });
+          row.appendChild(label);
+          row.appendChild(del);
+          wrap.appendChild(row);
+        });
+      });
+      libraryList.appendChild(wrap);
+    });
+  }
+
+  function deleteAsset(id){
+    if (!confirm('Delete this clip? This can\'t be undone.')) return;
+    api('/api/admin/delete-asset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
+    }).then(function(){
+      showToast('Deleted');
+      return loadAssets();
+    }).then(function(){
+      renderMoods(); renderStings(); renderWhispers(); renderLibrary();
+    }).catch(function(){ showToast('Failed to delete'); });
+  }
+
+  function fileToBase64(file){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){ resolve(reader.result.split(',')[1]); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  uploadBtn.addEventListener('click', function(){
+    var layer = uploadLayer.value;
+    var file = uploadFile.files[0];
+    if (!file){ uploadMsg.textContent = 'Choose a file first.'; return; }
+
+    uploadBtn.disabled = true;
+    uploadMsg.textContent = 'Uploading…';
+
+    fileToBase64(file).then(function(b64){
+      var body = { layer: layer, label: file.name, dataBase64: b64 };
+      if (layer === 'whisper') body.role = uploadRole.value;
+      if (layer === 'ambience') body.venue = uploadVenue.value;
+      if (layer === 'mood') body.moodKey = uploadMoodKey.value.trim();
+
+      return api('/api/admin/upload-asset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }).then(function(){
+      uploadMsg.textContent = 'Uploaded.';
+      uploadFile.value = '';
+      uploadMoodKey.value = '';
+      return loadAssets();
+    }).then(function(){
+      renderMoods(); renderStings(); renderWhispers(); renderLibrary();
+    }).catch(function(err){
+      uploadMsg.textContent = (err && err.message) || 'Upload failed.';
+    }).finally(function(){
+      uploadBtn.disabled = false;
+    });
+  });
+
   function sendTrigger(targetRole, assetUrl, label){
     var body = { venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl };
     if (focused) body.targetParticipantCode = focused.code;
@@ -352,6 +520,7 @@
     renderMoods();
     renderStings();
     renderWhispers();
+    renderLibrary();
     refreshVenueState();
     setFocus(null);
     if (presenceTimer) clearInterval(presenceTimer);
