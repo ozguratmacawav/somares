@@ -606,7 +606,7 @@
     var moodBuffers = {};      // moodKey -> AudioBuffer (all preloaded)
     var moodNode = null;       // { source, gain } for the currently playing mood
     var currentMoodKey = null;
-    var venue = null, role = null;
+    var venue = null, role = null, participantCode = null;
     var lastTriggerId = 0;
     var pollTimer = null;
 
@@ -689,7 +689,9 @@
 
     function pollVenueState(){
       if (!venue || !role) return;
-      fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(role) + '&since=' + lastTriggerId)
+      var url = '/api/venue-state?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(role) + '&since=' + lastTriggerId;
+      if (participantCode) url += '&code=' + encodeURIComponent(participantCode);
+      fetch(url)
         .then(function(r){ return r.json(); })
         .then(function(data){
           if (data.mood) setMood(data.mood);
@@ -701,10 +703,11 @@
         .catch(function(){});
     }
 
-    function start(manifest, venueKey, roleKey){
+    function start(manifest, venueKey, roleKey, participantCodeVal){
       unlock();
       venue = venueKey;
       role = roleKey;
+      participantCode = participantCodeVal;
       lastTriggerId = manifest.sinceId || 0;
       var jobs = [];
 
@@ -803,7 +806,7 @@
         showPlayer();
         return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
           .then(function(r){ return r.json(); })
-          .then(function(manifest){ return Engine.start(manifest, data.venue, data.role); });
+          .then(function(manifest){ return Engine.start(manifest, data.venue, data.role, data.participantCode); });
       })
       .catch(function(){ showError(); });
   });

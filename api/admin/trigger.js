@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { venue, targetRole, assetUrl } = req.body || {};
+  const { venue, targetRole, assetUrl, targetParticipantCode } = req.body || {};
   if (!venue || !assetUrl) {
     res.status(400).json({ error: 'venue and assetUrl are required' });
     return;
@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
 
   try {
     await ensureSchema();
-    const id = await insertTrigger(venue, targetRole || null, assetUrl);
+    const id = await insertTrigger(venue, targetRole || null, assetUrl, targetParticipantCode || null);
     res.status(200).json({ ok: true, id });
   } catch (err) {
     console.error('trigger failed', err);

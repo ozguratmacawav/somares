@@ -1,4 +1,4 @@
-const { ensureSchema, getVenueState, getTriggersSince } = require('../lib/db');
+const { ensureSchema, getVenueState, getTriggersSince, touchLastSeen } = require('../lib/db');
 
 const KNOWN_VENUES = new Set([
   'yildiz-museum', 'catalhoyuk', 'ciurlionis', 'fondazione-ago'
@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { venue, role } = req.query;
+  const { venue, role, code } = req.query;
   const since = parseInt(req.query.since, 10) || 0;
 
   if (!venue || !KNOWN_VENUES.has(venue) || !role) {
@@ -20,8 +20,9 @@ module.exports = async (req, res) => {
 
   try {
     await ensureSchema();
+    if (code) await touchLastSeen(code);
     const mood = await getVenueState(venue);
-    const triggers = await getTriggersSince(venue, role, since);
+    const triggers = await getTriggersSince(venue, role, code || '', since);
     res.status(200).json({
       mood,
       triggers: triggers.map((t) => ({ id: t.id, url: t.asset_url }))

@@ -82,6 +82,30 @@
     background:linear-gradient(135deg,#e07a6b,#b8493a); border:none; border-radius:999px; cursor:pointer;
   }
 
+  .scopeNote{ text-transform:none; letter-spacing:0; color:var(--text-dim); font-weight:400; font-size:12px; }
+
+  .targetBar{
+    font-size:13px; color:var(--text-dim); margin-bottom:14px;
+    padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:8px;
+  }
+  .targetBar b{ color:var(--amber-light); }
+  .targetBar button{
+    margin-left:10px; padding:3px 10px; font-size:11px; color:var(--text);
+    background:rgba(255,255,255,0.08); border:1px solid var(--border); border-radius:999px; cursor:pointer;
+  }
+
+  .presenceRow{
+    display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px;
+    cursor:pointer; transition:background 0.15s ease;
+  }
+  .presenceRow:hover{ background:rgba(255,255,255,0.05); }
+  .presenceRow.focused{ background:rgba(212,162,86,0.15); }
+  .dot{ width:9px; height:9px; border-radius:50%; background:#6b6355; flex-shrink:0; }
+  .dot.active{ background:#5fd67a; box-shadow:0 0 6px rgba(95,214,122,0.7); }
+  .presenceName{ font-size:13px; color:var(--text); }
+  .presenceRole{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-left:auto; }
+  .presenceEmpty{ color:var(--text-dim); font-size:13px; padding:8px 0; }
+
   .toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
     background:rgba(20,14,8,0.95); border:1px solid var(--border); color:var(--text);
@@ -95,9 +119,10 @@
 
 <div id="gate">
   <h1>SOMARES Conductor</h1>
-  <p class="sub">Enter the admin key to control the live experience.</p>
-  <input type="password" id="keyInput" placeholder="Admin key" autocomplete="off">
-  <button id="unlockBtn">Unlock</button>
+  <p class="sub">Sign in to control the live experience.</p>
+  <input type="text" id="userInput" placeholder="Username" autocomplete="username">
+  <input type="password" id="keyInput" placeholder="Password" autocomplete="current-password">
+  <button id="unlockBtn">Sign In</button>
   <div class="err" id="gateErr"></div>
 </div>
 
@@ -113,12 +138,18 @@
   </select>
 
   <div class="panel">
-    <h2>Mood</h2>
+    <h2>Who's here</h2>
+    <div class="targetBar" id="targetBar">Targeting: <b>everyone</b> at this venue</div>
+    <div id="presenceList"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Mood <span class="scopeNote">(always the whole venue)</span></h2>
     <div class="moodRow" id="moodRow"></div>
   </div>
 
   <div class="panel">
-    <h2>Sting — plays for everyone right now</h2>
+    <h2>Sting</h2>
     <div class="stingRow" id="stingRow"></div>
   </div>
 
@@ -136,6 +167,7 @@
 
   var gate = document.getElementById('gate');
   var dashboard = document.getElementById('dashboard');
+  var userInput = document.getElementById('userInput');
   var keyInput = document.getElementById('keyInput');
   var unlockBtn = document.getElementById('unlockBtn');
   var gateErr = document.getElementById('gateErr');
@@ -143,11 +175,16 @@
   var moodRow = document.getElementById('moodRow');
   var stingRow = document.getElementById('stingRow');
   var whisperGroups = document.getElementById('whisperGroups');
+  var presenceList = document.getElementById('presenceList');
+  var targetBar = document.getElementById('targetBar');
   var toast = document.getElementById('toast');
 
   var adminKey = null;
   var assets = [];
   var currentMood = null;
+  var people = [];
+  var focused = null; // { code, name } or null = targeting everyone
+  var presenceTimer = null;
 
   function showToast(msg){
     toast.textContent = msg;
@@ -192,6 +229,7 @@
   }
 
   function setMood(moodKey){
+    // Mood is always venue-wide, regardless of who's focused.
     api('/api/admin/set-mood', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -201,6 +239,49 @@
       highlightMood();
       showToast('Mood set to "' + moodKey + '"');
     }).catch(function(){ showToast('Failed to set mood'); });
+  }
+
+  function renderPresence(){
+    api('/api/admin/presence?venue=' + encodeURIComponent(venueSelect.value)).then(function(data){
+      people = data.people;
+      if (focused && !people.some(function(p){ return p.participantCode === focused.code; })){
+        setFocus(null);
+      }
+      if (!people.length){
+        presenceList.innerHTML = '<div class="presenceEmpty">No one has registered here yet.</div>';
+        return;
+      }
+      presenceList.innerHTML = '';
+      people.forEach(function(p){
+        var row = document.createElement('div');
+        row.className = 'presenceRow' + (focused && focused.code === p.participantCode ? ' focused' : '');
+        var dot = document.createElement('div');
+        dot.className = 'dot' + (p.active ? ' active' : '');
+        var name = document.createElement('div');
+        name.className = 'presenceName';
+        name.textContent = p.firstName + ' ' + p.lastName + ' · #' + p.participantCode;
+        var role = document.createElement('div');
+        role.className = 'presenceRole';
+        role.textContent = p.role;
+        row.appendChild(dot);
+        row.appendChild(name);
+        row.appendChild(role);
+        row.addEventListener('click', function(){
+          setFocus(focused && focused.code === p.participantCode ? null : { code: p.participantCode, name: p.firstName + ' ' + p.lastName, role: p.role });
+        });
+        presenceList.appendChild(row);
+      });
+    }).catch(function(){});
+  }
+
+  function setFocus(f){
+    focused = f;
+    targetBar.innerHTML = focused
+      ? 'Targeting: <b>' + focused.name + '</b> (' + focused.role + ') only <button id="clearFocusBtn">Clear</button>'
+      : 'Targeting: <b>everyone</b> at this venue';
+    var clearBtn = document.getElementById('clearFocusBtn');
+    if (clearBtn) clearBtn.addEventListener('click', function(){ setFocus(null); });
+    renderPresence();
   }
 
   function renderStings(){
@@ -249,12 +330,14 @@
   }
 
   function sendTrigger(targetRole, assetUrl, label){
+    var body = { venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl };
+    if (focused) body.targetParticipantCode = focused.code;
     api('/api/admin/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl })
+      body: JSON.stringify(body)
     }).then(function(){
-      showToast('Sent: ' + label);
+      showToast('Sent: ' + label + (focused ? ' → ' + focused.name : ''));
     }).catch(function(){ showToast('Failed to send trigger'); });
   }
 
@@ -270,12 +353,19 @@
     renderStings();
     renderWhispers();
     refreshVenueState();
+    setFocus(null);
+    if (presenceTimer) clearInterval(presenceTimer);
+    presenceTimer = setInterval(renderPresence, 5000);
   }
 
-  venueSelect.addEventListener('change', refreshVenueState);
+  venueSelect.addEventListener('change', renderAll);
 
-  function unlock(key){
+  function unlock(username, key){
     gateErr.textContent = '';
+    if (username !== 'admin'){
+      gateErr.textContent = 'Invalid username or password.';
+      return;
+    }
     unlockBtn.disabled = true;
     adminKey = key;
     loadAssets()
@@ -286,17 +376,19 @@
         renderAll();
       })
       .catch(function(){
-        gateErr.textContent = 'Invalid key.';
+        gateErr.textContent = 'Invalid username or password.';
         unlockBtn.disabled = false;
         adminKey = null;
       });
   }
 
-  unlockBtn.addEventListener('click', function(){ unlock(keyInput.value.trim()); });
-  keyInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') unlock(keyInput.value.trim()); });
+  function attemptUnlock(){ unlock(userInput.value.trim(), keyInput.value); }
+  unlockBtn.addEventListener('click', attemptUnlock);
+  userInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') attemptUnlock(); });
+  keyInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') attemptUnlock(); });
 
   var storedKey = sessionStorage.getItem('somares_admin_key');
-  if (storedKey) unlock(storedKey);
+  if (storedKey) unlock('admin', storedKey);
 })();
 </script>
 
