@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOMARES — Admin</title>
+<style>
+  :root{
+    --bg:#120b06;
+    --panel:#1c130b;
+    --border:rgba(255,255,255,0.09);
+    --text:#f4ecdd;
+    --text-dim:#a99b82;
+    --amber:#d4a256;
+    --amber-light:#f0c988;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;
+    padding:32px 20px;
+  }
+  h1{
+    font-size:20px;
+    font-weight:600;
+    letter-spacing:0.02em;
+    margin:0 0 4px;
+  }
+  .sub{
+    color:var(--text-dim);
+    font-size:13px;
+    margin:0 0 28px;
+  }
+
+  #gate{
+    max-width:320px;
+    margin:80px auto;
+    text-align:center;
+  }
+  #gate input{
+    width:100%;
+    padding:12px 14px;
+    font-size:15px;
+    color:var(--text);
+    background:rgba(255,255,255,0.05);
+    border:1px solid var(--border);
+    border-radius:10px;
+    outline:none;
+    margin-bottom:12px;
+    font-family:inherit;
+  }
+  #gate button{
+    width:100%;
+    padding:12px;
+    font-size:14px;
+    font-weight:600;
+    color:#1a1006;
+    background:linear-gradient(135deg,var(--amber-light),var(--amber));
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+  }
+  #gate .err{ color:#e07a6b; font-size:13px; margin-top:10px; min-height:16px; }
+
+  #dashboard{ display:none; max-width:1000px; margin:0 auto; }
+
+  .toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .stat{
+    display:inline-flex;
+    gap:18px;
+    font-size:13px;
+    color:var(--text-dim);
+  }
+  .stat b{ color:var(--amber-light); font-weight:600; }
+
+  button.refresh{
+    padding:8px 14px;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    color:var(--text);
+    background:rgba(255,255,255,0.06);
+    border:1px solid var(--border);
+    border-radius:8px;
+    cursor:pointer;
+  }
+  button.refresh:hover{ background:rgba(255,255,255,0.1); }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    font-size:13px;
+  }
+  th,td{
+    padding:10px 14px;
+    text-align:left;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  th{
+    color:var(--text-dim);
+    font-weight:600;
+    text-transform:uppercase;
+    font-size:11px;
+    letter-spacing:0.05em;
+  }
+  tr:last-child td{ border-bottom:none; }
+  tr:hover td{ background:rgba(255,255,255,0.02); }
+
+  .role{
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.02em;
+    background:rgba(212,162,86,0.14);
+    color:var(--amber-light);
+  }
+
+  .empty{
+    text-align:center;
+    color:var(--text-dim);
+    padding:40px;
+    font-size:13px;
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>SOMARES Admin</h1>
+  <p class="sub">Enter the admin key to view registrations.</p>
+  <input type="password" id="keyInput" placeholder="Admin key" autocomplete="off">
+  <button id="unlockBtn">Unlock</button>
+  <div class="err" id="gateErr"></div>
+</div>
+
+<div id="dashboard">
+  <h1>Registrations</h1>
+  <p class="sub">Live view of everyone who has registered, across all venues. Roles are never shown to participants — this view is for the team only.</p>
+
+  <div class="toolbar">
+    <div class="stat" id="stats"></div>
+    <button class="refresh" id="refreshBtn">Refresh</button>
+  </div>
+
+  <div id="tableWrap"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var gate = document.getElementById('gate');
+  var dashboard = document.getElementById('dashboard');
+  var keyInput = document.getElementById('keyInput');
+  var unlockBtn = document.getElementById('unlockBtn');
+  var gateErr = document.getElementById('gateErr');
+  var tableWrap = document.getElementById('tableWrap');
+  var stats = document.getElementById('stats');
+  var refreshBtn = document.getElementById('refreshBtn');
+
+  var storedKey = sessionStorage.getItem('somares_admin_key');
+
+  function venueLabel(v){
+    return {
+      'yildiz-museum': 'Yıldız Museum',
+      'catalhoyuk': 'Çatalhöyük',
+      'ciurlionis': 'Čiurlionis Museum',
+      'fondazione-ago': 'Fondazione AGO'
+    }[v] || v;
+  }
+
+  function render(data){
+    var rows = data.registrations;
+
+    var byVenue = {};
+    rows.forEach(function(r){ byVenue[r.venue] = (byVenue[r.venue]||0) + 1; });
+    var statHtml = '<span>Total <b>' + rows.length + '</b></span>';
+    Object.keys(byVenue).forEach(function(v){
+      statHtml += '<span>' + venueLabel(v) + ' <b>' + byVenue[v] + '</b></span>';
+    });
+    stats.innerHTML = statHtml;
+
+    if (!rows.length){
+      tableWrap.innerHTML = '<div class="empty">No registrations yet.</div>';
+      return;
+    }
+
+    var html = '<table><thead><tr>' +
+      '<th>ID</th><th>Name</th><th>Venue</th><th>Role</th><th>Group</th><th>Time</th>' +
+      '</tr></thead><tbody>';
+
+    rows.forEach(function(r){
+      var time = new Date(r.created_at).toLocaleString();
+      html += '<tr>' +
+        '<td>' + r.participant_code + '</td>' +
+        '<td>' + escapeHtml(r.first_name + ' ' + r.last_name) + '</td>' +
+        '<td>' + venueLabel(r.venue) + '</td>' +
+        '<td><span class="role">' + r.role + '</span></td>' +
+        '<td>#' + r.group_index + ' · pos ' + r.position_in_group + '</td>' +
+        '<td>' + time + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    tableWrap.innerHTML = html;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+
+  function load(key){
+    return fetch('/api/admin/registrations', { headers: { 'x-admin-key': key } })
+      .then(function(r){
+        if (r.status === 401) throw new Error('unauthorized');
+        if (!r.ok) throw new Error('failed');
+        return r.json();
+      });
+  }
+
+  function unlock(key){
+    gateErr.textContent = '';
+    unlockBtn.disabled = true;
+    load(key)
+      .then(function(data){
+        sessionStorage.setItem('somares_admin_key', key);
+        gate.style.display = 'none';
+        dashboard.style.display = 'block';
+        render(data);
+      })
+      .catch(function(){
+        gateErr.textContent = 'Invalid key.';
+        unlockBtn.disabled = false;
+      });
+  }
+
+  unlockBtn.addEventListener('click', function(){ unlock(keyInput.value.trim()); });
+  keyInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') unlock(keyInput.value.trim()); });
+
+  refreshBtn.addEventListener('click', function(){
+    var key = sessionStorage.getItem('somares_admin_key');
+    if (!key) return;
+    load(key).then(render).catch(function(){});
+  });
+
+  if (storedKey){
+    load(storedKey).then(function(data){
+      gate.style.display = 'none';
+      dashboard.style.display = 'block';
+      render(data);
+    }).catch(function(){
+      sessionStorage.removeItem('somares_admin_key');
+    });
+  }
+})();
+</script>
+
+</body>
+</html>

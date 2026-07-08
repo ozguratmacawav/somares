@@ -12,3 +12,5 @@ node_modules/
 # Project reference documents — not part of the app source
 *.docx
 *.pptx
+
+.env*
