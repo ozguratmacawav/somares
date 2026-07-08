@@ -602,6 +602,13 @@
     var whisperPool = [];
     var whisperTimer = null;
     var muted = false;
+    var bufferCache = {};      // url -> decoded AudioBuffer, for instant re-use
+    var moodBuffers = {};      // moodKey -> AudioBuffer (all preloaded)
+    var moodNode = null;       // { source, gain } for the currently playing mood
+    var currentMoodKey = null;
+    var venue = null, role = null;
+    var lastTriggerId = 0;
+    var pollTimer = null;
 
     // Must be called synchronously inside a real user-gesture handler (the
     // "Begin" tap) — mobile browsers refuse to start audio otherwise.
@@ -623,9 +630,11 @@
     }
 
     function loadBuffer(url){
+      if (bufferCache[url]) return Promise.resolve(bufferCache[url]);
       return fetch(url)
         .then(function(r){ return r.arrayBuffer(); })
-        .then(function(ab){ return audioCtx.decodeAudioData(ab); });
+        .then(function(ab){ return audioCtx.decodeAudioData(ab); })
+        .then(function(buf){ bufferCache[url] = buf; return buf; });
     }
 
     function playLoop(buffer, gainNode){
@@ -637,42 +646,94 @@
       return src;
     }
 
+    function playOneShot(buffer, gainNode){
+      var src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(gainNode);
+      src.start();
+      return src;
+    }
+
     function scheduleWhispers(){
       if (!whisperPool.length) return;
       var buf = whisperPool[Math.floor(Math.random() * whisperPool.length)];
-      var src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      src.connect(gains.whisper);
-      src.start();
+      playOneShot(buf, gains.whisper);
       var nextIn = 18000 + Math.random() * 22000; // 18–40s between whispers
       whisperTimer = setTimeout(scheduleWhispers, nextIn);
     }
 
-    function start(manifest){
+    // Crossfades from whatever mood is currently playing to a new one.
+    function setMood(moodKey){
+      if (moodKey === currentMoodKey || !moodBuffers[moodKey]) return;
+      var t = audioCtx.currentTime;
+      var prev = moodNode;
+
+      var g = audioCtx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(1, t + 2.5);
+      g.connect(gains.mood);
+      var src = audioCtx.createBufferSource();
+      src.buffer = moodBuffers[moodKey];
+      src.loop = true;
+      src.connect(g);
+      src.start();
+      moodNode = { source: src, gain: g };
+      currentMoodKey = moodKey;
+
+      if (prev){
+        prev.gain.gain.setValueAtTime(prev.gain.gain.value, t);
+        prev.gain.gain.linearRampToValueAtTime(0, t + 2.5);
+        prev.source.stop(t + 2.6);
+      }
+    }
+
+    function pollVenueState(){
+      if (!venue || !role) return;
+      fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(role) + '&since=' + lastTriggerId)
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if (data.mood) setMood(data.mood);
+          (data.triggers || []).forEach(function(trig){
+            lastTriggerId = Math.max(lastTriggerId, trig.id);
+            loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });
+          });
+        })
+        .catch(function(){});
+    }
+
+    function start(manifest, venueKey, roleKey){
       unlock();
+      venue = venueKey;
+      role = roleKey;
+      lastTriggerId = manifest.sinceId || 0;
       var jobs = [];
 
       manifest.ambiences.forEach(function(url){ jobs.push(loadBuffer(url).then(function(b){ playLoop(b, gains.ambience); })); });
 
-      var moodUrl = manifest.moods.calm || manifest.moods.neutral || Object.values(manifest.moods)[0];
-      if (moodUrl) jobs.push(loadBuffer(moodUrl).then(function(b){ playLoop(b, gains.mood); }));
+      Object.keys(manifest.moods).forEach(function(key){
+        jobs.push(loadBuffer(manifest.moods[key]).then(function(b){ moodBuffers[key] = b; }));
+      });
 
       manifest.whispers.forEach(function(url){
         jobs.push(loadBuffer(url).then(function(b){ whisperPool.push(b); }));
       });
 
       return Promise.all(jobs).then(function(){
+        var startMood = manifest.moods.calm ? 'calm' : Object.keys(manifest.moods)[0];
+        if (startMood) setMood(startMood);
         // First whisper arrives a little sooner so the layer reads as alive early on.
         whisperTimer = setTimeout(scheduleWhispers, 6000 + Math.random() * 6000);
+        pollTimer = setInterval(pollVenueState, 4000);
       });
     }
 
     function toggleMute(){
       muted = !muted;
       var t = audioCtx.currentTime;
-      ['ambience','mood','whisper'].forEach(function(k){
-        gains[k].gain.setTargetAtTime(muted ? 0 : (k === 'whisper' ? 0.9 : (k === 'mood' ? 0.32 : 0.22)), t, 0.05);
+      ['ambience','whisper'].forEach(function(k){
+        gains[k].gain.setTargetAtTime(muted ? 0 : (k === 'whisper' ? 0.9 : 0.22), t, 0.05);
       });
+      gains.mood.gain.setTargetAtTime(muted ? 0 : 0.32, t, 0.05);
       return muted;
     }
 
@@ -742,7 +803,7 @@
         showPlayer();
         return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
           .then(function(r){ return r.json(); })
-          .then(function(manifest){ return Engine.start(manifest); });
+          .then(function(manifest){ return Engine.start(manifest, data.venue, data.role); });
       })
       .catch(function(){ showError(); });
   });

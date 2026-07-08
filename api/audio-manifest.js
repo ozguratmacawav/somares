@@ -1,4 +1,4 @@
-const { ensureSchema, getAudioManifest } = require('../lib/db');
+const { ensureSchema, getAudioManifest, latestTriggerId } = require('../lib/db');
 
 const KNOWN_ROLES = new Set([
   'merchant', 'traveler', 'translator', 'innkeeper', 'guard',
@@ -24,6 +24,9 @@ module.exports = async (req, res) => {
   try {
     await ensureSchema();
     const manifest = await getAudioManifest(venue, role);
+    // Baseline so a freshly-joined participant only reacts to triggers fired
+    // after they arrived, not the venue's entire trigger history.
+    manifest.sinceId = await latestTriggerId(venue);
     res.status(200).json(manifest);
   } catch (err) {
     console.error('audio-manifest failed', err);

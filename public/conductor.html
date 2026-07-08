@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOMARES — Conductor</title>
+<style>
+  :root{
+    --bg:#120b06;
+    --panel:#1c130b;
+    --border:rgba(255,255,255,0.09);
+    --text:#f4ecdd;
+    --text-dim:#a99b82;
+    --amber:#d4a256;
+    --amber-light:#f0c988;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;
+    padding:32px 20px;
+  }
+  h1{ font-size:20px; font-weight:600; margin:0 0 4px; }
+  h2{ font-size:14px; font-weight:600; color:var(--amber-light); text-transform:uppercase; letter-spacing:0.06em; margin:0 0 14px; }
+  .sub{ color:var(--text-dim); font-size:13px; margin:0 0 24px; }
+
+  #gate{ max-width:320px; margin:80px auto; text-align:center; }
+  #gate input{
+    width:100%; padding:12px 14px; font-size:15px; color:var(--text);
+    background:rgba(255,255,255,0.05); border:1px solid var(--border);
+    border-radius:10px; outline:none; margin-bottom:12px; font-family:inherit;
+  }
+  #gate button{
+    width:100%; padding:12px; font-size:14px; font-weight:600; color:#1a1006;
+    background:linear-gradient(135deg,var(--amber-light),var(--amber));
+    border:none; border-radius:10px; cursor:pointer;
+  }
+  #gate .err{ color:#e07a6b; font-size:13px; margin-top:10px; min-height:16px; }
+
+  #dashboard{ display:none; max-width:720px; margin:0 auto; }
+
+  select{
+    width:100%; padding:10px 12px; font-size:14px; color:var(--text);
+    background:rgba(255,255,255,0.05); border:1px solid var(--border);
+    border-radius:8px; outline:none; margin-bottom:20px; font-family:inherit;
+  }
+  select option{ color:#1a1006; }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:20px; margin-bottom:20px;
+  }
+
+  .moodRow{ display:flex; flex-wrap:wrap; gap:8px; }
+  .moodBtn{
+    padding:10px 16px; font-size:13px; font-weight:600; letter-spacing:0.02em;
+    color:var(--text); background:rgba(255,255,255,0.06); border:1px solid var(--border);
+    border-radius:999px; cursor:pointer; transition:background 0.2s ease, color 0.2s ease;
+  }
+  .moodBtn:hover{ background:rgba(255,255,255,0.1); }
+  .moodBtn.active{ background:linear-gradient(135deg,var(--amber-light),var(--amber)); color:#1a1006; border-color:transparent; }
+
+  .whisperGroup{ margin-bottom:16px; }
+  .whisperGroup:last-child{ margin-bottom:0; }
+  .whisperGroup .roleLabel{
+    font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px;
+  }
+  .whisperRow{ display:flex; flex-wrap:wrap; gap:8px; }
+  .whisperBtn{
+    padding:8px 14px; font-size:13px; color:var(--text); background:rgba(255,255,255,0.05);
+    border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:background 0.15s ease;
+  }
+  .whisperBtn:hover{ background:rgba(212,162,86,0.15); border-color:var(--amber); }
+  .whisperBtn:active{ transform:scale(0.97); }
+
+  .stingRow{ display:flex; flex-wrap:wrap; gap:8px; }
+  .stingBtn{
+    padding:10px 16px; font-size:13px; font-weight:600; color:#1a1006;
+    background:linear-gradient(135deg,#e07a6b,#b8493a); border:none; border-radius:999px; cursor:pointer;
+  }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:rgba(20,14,8,0.95); border:1px solid var(--border); color:var(--text);
+    padding:10px 18px; border-radius:10px; font-size:13px; opacity:0;
+    transition:opacity 0.25s ease, transform 0.25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>SOMARES Conductor</h1>
+  <p class="sub">Enter the admin key to control the live experience.</p>
+  <input type="password" id="keyInput" placeholder="Admin key" autocomplete="off">
+  <button id="unlockBtn">Unlock</button>
+  <div class="err" id="gateErr"></div>
+</div>
+
+<div id="dashboard">
+  <h1>Conductor</h1>
+  <p class="sub">Live control for one venue. Every connected phone there checks in every few seconds.</p>
+
+  <select id="venueSelect">
+    <option value="yildiz-museum">Yıldız Museum</option>
+    <option value="catalhoyuk">Çatalhöyük</option>
+    <option value="ciurlionis">Čiurlionis Museum</option>
+    <option value="fondazione-ago">Fondazione AGO</option>
+  </select>
+
+  <div class="panel">
+    <h2>Mood</h2>
+    <div class="moodRow" id="moodRow"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Sting — plays for everyone right now</h2>
+    <div class="stingRow" id="stingRow"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Trigger a whisper</h2>
+    <div id="whisperGroups"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var gate = document.getElementById('gate');
+  var dashboard = document.getElementById('dashboard');
+  var keyInput = document.getElementById('keyInput');
+  var unlockBtn = document.getElementById('unlockBtn');
+  var gateErr = document.getElementById('gateErr');
+  var venueSelect = document.getElementById('venueSelect');
+  var moodRow = document.getElementById('moodRow');
+  var stingRow = document.getElementById('stingRow');
+  var whisperGroups = document.getElementById('whisperGroups');
+  var toast = document.getElementById('toast');
+
+  var adminKey = null;
+  var assets = [];
+  var currentMood = null;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 1800);
+  }
+
+  function api(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ 'x-admin-key': adminKey }, opts.headers || {});
+    return fetch(path, opts).then(function(r){
+      if (!r.ok) throw new Error('request failed');
+      return r.json();
+    });
+  }
+
+  function loadAssets(){
+    return api('/api/admin/audio-assets').then(function(data){ assets = data.assets; });
+  }
+
+  function renderMoods(){
+    var moods = assets.filter(function(a){ return a.layer === 'mood'; });
+    var seen = {};
+    moodRow.innerHTML = '';
+    moods.forEach(function(m){
+      if (seen[m.mood_key]) return;
+      seen[m.mood_key] = true;
+      var btn = document.createElement('button');
+      btn.className = 'moodBtn';
+      btn.textContent = m.mood_key;
+      btn.dataset.mood = m.mood_key;
+      btn.addEventListener('click', function(){ setMood(m.mood_key); });
+      moodRow.appendChild(btn);
+    });
+    highlightMood();
+  }
+
+  function highlightMood(){
+    Array.prototype.forEach.call(moodRow.children, function(btn){
+      btn.classList.toggle('active', btn.dataset.mood === currentMood);
+    });
+  }
+
+  function setMood(moodKey){
+    api('/api/admin/set-mood', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: venueSelect.value, moodKey: moodKey })
+    }).then(function(){
+      currentMood = moodKey;
+      highlightMood();
+      showToast('Mood set to "' + moodKey + '"');
+    }).catch(function(){ showToast('Failed to set mood'); });
+  }
+
+  function renderStings(){
+    // Any mood-layer asset can double as an instant sting for everyone.
+    var moods = assets.filter(function(a){ return a.layer === 'mood'; });
+    var seen = {};
+    stingRow.innerHTML = '';
+    moods.forEach(function(m){
+      if (seen[m.mood_key]) return;
+      seen[m.mood_key] = true;
+      var btn = document.createElement('button');
+      btn.className = 'stingBtn';
+      btn.textContent = m.mood_key;
+      btn.addEventListener('click', function(){ sendTrigger(null, m.url, m.mood_key); });
+      stingRow.appendChild(btn);
+    });
+  }
+
+  function renderWhispers(){
+    var whispers = assets.filter(function(a){ return a.layer === 'whisper'; });
+    var byRole = {};
+    whispers.forEach(function(w){
+      byRole[w.role] = byRole[w.role] || [];
+      byRole[w.role].push(w);
+    });
+    whisperGroups.innerHTML = '';
+    Object.keys(byRole).sort().forEach(function(role){
+      var group = document.createElement('div');
+      group.className = 'whisperGroup';
+      var label = document.createElement('div');
+      label.className = 'roleLabel';
+      label.textContent = role;
+      group.appendChild(label);
+      var row = document.createElement('div');
+      row.className = 'whisperRow';
+      byRole[role].forEach(function(w, i){
+        var btn = document.createElement('button');
+        btn.className = 'whisperBtn';
+        btn.textContent = (i + 1);
+        btn.addEventListener('click', function(){ sendTrigger(role, w.url, role + ' #' + (i + 1)); });
+        row.appendChild(btn);
+      });
+      group.appendChild(row);
+      whisperGroups.appendChild(group);
+    });
+  }
+
+  function sendTrigger(targetRole, assetUrl, label){
+    api('/api/admin/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl })
+    }).then(function(){
+      showToast('Sent: ' + label);
+    }).catch(function(){ showToast('Failed to send trigger'); });
+  }
+
+  function refreshVenueState(){
+    fetch('/api/venue-state?venue=' + encodeURIComponent(venueSelect.value) + '&role=merchant&since=999999999')
+      .then(function(r){ return r.json(); })
+      .then(function(data){ currentMood = data.mood; highlightMood(); })
+      .catch(function(){});
+  }
+
+  function renderAll(){
+    renderMoods();
+    renderStings();
+    renderWhispers();
+    refreshVenueState();
+  }
+
+  venueSelect.addEventListener('change', refreshVenueState);
+
+  function unlock(key){
+    gateErr.textContent = '';
+    unlockBtn.disabled = true;
+    adminKey = key;
+    loadAssets()
+      .then(function(){
+        sessionStorage.setItem('somares_admin_key', key);
+        gate.style.display = 'none';
+        dashboard.style.display = 'block';
+        renderAll();
+      })
+      .catch(function(){
+        gateErr.textContent = 'Invalid key.';
+        unlockBtn.disabled = false;
+        adminKey = null;
+      });
+  }
+
+  unlockBtn.addEventListener('click', function(){ unlock(keyInput.value.trim()); });
+  keyInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') unlock(keyInput.value.trim()); });
+
+  var storedKey = sessionStorage.getItem('somares_admin_key');
+  if (storedKey) unlock(storedKey);
+})();
+</script>
+
+</body>
+</html>
