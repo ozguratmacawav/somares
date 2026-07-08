@@ -1,0 +1,9 @@
+{
+  "name": "somares",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SOMARES onboarding web app — participant registration and role assignment.",
+  "dependencies": {
+    "pg": "^8.22.0"
+  }
+}

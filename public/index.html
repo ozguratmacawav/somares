@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOMARES</title>
+<style>
+  :root{
+    --bg-0:#120b06;
+    --bg-1:#241708;
+    --bg-2:#3a250f;
+    --bronze:#8a5a2b;
+    --amber:#d4a256;
+    --amber-light:#f0c988;
+    --silver:#c9cfd6;
+    --silver-dim:#8f959c;
+    --text:#f4ecdd;
+    --text-dim:#c9bda4;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--bg-0);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+
+  canvas#bg{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+  }
+
+  .vignette{
+    position:fixed;
+    inset:0;
+    background:radial-gradient(120% 90% at 50% 30%, transparent 0%, rgba(8,5,2,0.55) 100%);
+    pointer-events:none;
+  }
+
+  .wrap{
+    position:relative;
+    z-index:2;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px 24px;
+    text-align:center;
+  }
+
+  .hero{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    z-index:1;
+  }
+
+  .scrim{
+    position:absolute;
+    z-index:-1;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:min(120%, 480px);
+    height:calc(100% + 90px);
+    background:radial-gradient(ellipse at center, rgba(9,6,3,0.6) 0%, rgba(9,6,3,0.38) 42%, rgba(9,6,3,0) 72%);
+    filter:blur(6px);
+    pointer-events:none;
+  }
+
+  .mark{
+    width:56px;
+    height:56px;
+    margin-bottom:22px;
+    opacity:0.95;
+    filter:drop-shadow(0 0 18px rgba(212,162,86,0.35));
+  }
+
+  h1{
+    margin:0;
+    font-size:clamp(34px,9vw,46px);
+    font-weight:200;
+    letter-spacing:0.14em;
+    color:var(--text);
+    text-shadow:0 0 30px rgba(212,162,86,0.18);
+  }
+
+  .tagline{
+    margin:10px 0 26px;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.32em;
+    text-transform:uppercase;
+    color:var(--amber-light);
+    opacity:0.85;
+  }
+
+  .brief{
+    max-width:360px;
+    margin:0 0 36px;
+    font-size:15px;
+    line-height:1.65;
+    color:var(--text-dim);
+    font-weight:400;
+  }
+
+  .card{
+    width:100%;
+    max-width:360px;
+    background:rgba(255,255,255,0.045);
+    border:1px solid rgba(255,255,255,0.09);
+    border-radius:22px;
+    padding:28px 24px;
+    backdrop-filter:blur(22px) saturate(140%);
+    -webkit-backdrop-filter:blur(22px) saturate(140%);
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+    transition:opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .card h2{
+    margin:0 0 20px;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.2em;
+    text-transform:uppercase;
+    color:var(--silver);
+  }
+
+  .field{
+    position:relative;
+    margin-bottom:16px;
+    text-align:left;
+  }
+
+  .field input{
+    width:100%;
+    padding:14px 16px;
+    font-size:16px;
+    color:var(--text);
+    background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:12px;
+    outline:none;
+    transition:border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+    font-family:inherit;
+  }
+
+  .field input::placeholder{ color:var(--silver-dim); }
+
+  .field input:focus{
+    border-color:var(--amber);
+    background:rgba(212,162,86,0.06);
+    box-shadow:0 0 0 4px rgba(212,162,86,0.12);
+  }
+
+  .field select{
+    width:100%;
+    padding:14px 40px 14px 16px;
+    font-size:16px;
+    color:var(--text);
+    background:rgba(255,255,255,0.05) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23c9cfd6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>') no-repeat right 14px center;
+    background-size:16px;
+    border:1px solid rgba(255,255,255,0.12);
+    border-radius:12px;
+    outline:none;
+    appearance:none;
+    -webkit-appearance:none;
+    transition:border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+    font-family:inherit;
+  }
+
+  .field select:invalid{ color:var(--silver-dim); }
+
+  .field select option{
+    color:#1a1006;
+    background:#f4ecdd;
+  }
+
+  .field select:focus{
+    border-color:var(--amber);
+    background-color:rgba(212,162,86,0.06);
+    box-shadow:0 0 0 4px rgba(212,162,86,0.12);
+  }
+
+  button.submit{
+    width:100%;
+    margin-top:6px;
+    padding:15px 18px;
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:0.06em;
+    color:#1a1006;
+    background:linear-gradient(135deg,var(--amber-light),var(--bronze));
+    border:none;
+    border-radius:14px;
+    cursor:pointer;
+    transition:transform 0.15s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+    box-shadow:0 10px 30px rgba(212,162,86,0.25);
+    font-family:inherit;
+  }
+
+  button.submit:active{ transform:scale(0.97); }
+  button.submit:disabled{ opacity:0.5; cursor:default; transform:none; }
+
+  button.submit.shake{ animation:shake 0.4s ease; }
+  @keyframes shake{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-6px); }
+    75%{ transform:translateX(6px); }
+  }
+
+  .confirm{
+    display:none;
+    width:100%;
+    max-width:360px;
+    flex-direction:column;
+    align-items:center;
+    opacity:0;
+    transform:translateY(10px);
+    transition:opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .confirm.show{
+    display:flex;
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  .check{
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    border:1.5px solid rgba(212,162,86,0.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:22px;
+    box-shadow:0 0 40px rgba(212,162,86,0.18);
+  }
+
+  .check svg{ width:26px; height:26px; }
+
+  .confirm h2{
+    margin:0 0 10px;
+    font-size:20px;
+    font-weight:300;
+    letter-spacing:0.04em;
+    color:var(--text);
+  }
+
+  .confirm p{
+    margin:0 0 18px;
+    font-size:14px;
+    line-height:1.6;
+    color:var(--text-dim);
+    max-width:300px;
+  }
+
+  .pid{
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--silver-dim);
+  }
+
+  .pid span{ color:var(--silver); font-weight:600; }
+
+  footer{
+    position:relative;
+    z-index:2;
+    padding-bottom:22px;
+    font-size:10px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:rgba(201,205,214,0.35);
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="vignette"></div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="scrim"></div>
+    <svg class="mark" viewBox="0 0 56 56" fill="none">
+      <defs>
+        <linearGradient id="markGrad" x1="0" y1="0" x2="56" y2="56">
+          <stop offset="0%" stop-color="#f0c988"/>
+          <stop offset="100%" stop-color="#8a5a2b"/>
+        </linearGradient>
+      </defs>
+      <circle cx="28" cy="28" r="26.5" stroke="url(#markGrad)" stroke-width="1.2" opacity="0.6"/>
+      <path d="M12 30 Q17 18 21 30 T30 30 T39 30 T44 30" stroke="url(#markGrad)" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    </svg>
+
+    <h1>SOMARES</h1>
+    <div class="tagline">Experience Through Sound</div>
+
+    <p class="brief" id="briefText">
+      You're about to experience this space in a new way. Put on your
+      headphones and let the sound guide you — your body will discover the rest.
+    </p>
+  </div>
+
+  <form class="card" id="registerForm">
+    <h2>Join the Experience</h2>
+    <div class="field">
+      <input type="text" id="firstName" placeholder="First Name" autocomplete="given-name" required>
+    </div>
+    <div class="field">
+      <input type="text" id="lastName" placeholder="Last Name" autocomplete="family-name" required>
+    </div>
+    <div class="field">
+      <select id="venue" required>
+        <option value="" disabled selected>Select Location</option>
+        <option value="yildiz-museum">Yıldız Museum — YTU, Istanbul, Türkiye</option>
+        <option value="catalhoyuk">Çatalhöyük — Konya, Türkiye</option>
+        <option value="ciurlionis">M.K. Čiurlionis Museum — Lithuania</option>
+        <option value="fondazione-ago">Fondazione AGO — Italy</option>
+      </select>
+    </div>
+    <button type="submit" class="submit" id="submitBtn">Begin</button>
+  </form>
+
+  <div class="confirm" id="confirmBox">
+    <div class="check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#f0c988" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12.5L9.5 18L20 6"/>
+      </svg>
+    </div>
+    <h2>You're Ready</h2>
+    <p>Put on your headphones and wait for the sound to begin. The experience will start before you notice.</p>
+    <div class="pid">Participant No <span id="pidValue">—</span></div>
+  </div>
+</div>
+
+<footer>SOMARES · Horizon Europe</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- Background: drifting particles + ambient waveform ---------- */
+  var canvas = document.getElementById('bg');
+  var ctx = canvas.getContext('2d');
+  var W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  var palette = ['#d4a256', '#f0c988', '#c9cfd6', '#8f959c', '#8a5a2b'];
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  /* Faint far-background dust, kept sparse for depth behind the sand wave */
+  var DUST_COUNT = Math.round((W*H) / 22000);
+  DUST_COUNT = Math.max(30, Math.min(DUST_COUNT, 70));
+
+  var dust = [];
+  for (var i=0; i<DUST_COUNT; i++){
+    dust.push({
+      x: rand(0,W),
+      y: rand(0,H),
+      r: rand(0.5, 1.6),
+      speedY: rand(0.03, 0.12),
+      sway: rand(0, Math.PI*2),
+      swaySpeed: rand(0.001, 0.004),
+      swayAmp: rand(3, 12),
+      alpha: rand(0.08, 0.28),
+      color: palette[Math.floor(Math.random()*palette.length)]
+    });
+  }
+
+  function drawDust(){
+    for (var i=0; i<dust.length; i++){
+      var p = dust[i];
+      p.y -= p.speedY;
+      p.sway += p.swaySpeed;
+      var x = p.x + Math.sin(p.sway) * p.swayAmp;
+      if (p.y < -10){ p.y = H + 10; p.x = rand(0,W); }
+
+      ctx.beginPath();
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.alpha;
+      ctx.arc(x, p.y, p.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Glowing waveform lines, layered for a soft, shadowed depth.
+     Positive speed here reads as leftward travel — deliberately opposite to the rightward sand. */
+  var waveLanes = [
+    { dy: 26,  amp: 0.030, freq: 0.0062, speed: 0.0015, color:'#8a5a2b', width: 6,   alpha: 0.10, blur: 22 },
+    { dy: 0,   amp: 0.042, freq: 0.0050, speed: 0.0018, color:'#d4a256', width: 2.4, alpha: 0.35, blur: 16 },
+    { dy: -30, amp: 0.026, freq: 0.0072, speed: 0.0012, color:'#c9cfd6', width: 1.6, alpha: 0.22, blur: 12 },
+    { dy: 14,  amp: 0.020, freq: 0.0085, speed: 0.0022, color:'#f0c988', width: 1.2, alpha: 0.18, blur: 10 }
+  ];
+
+  function waveY(x, t, baseY, amp, freq, speed){
+    return baseY
+      + Math.sin(x*freq + t*speed) * amp
+      + Math.sin(x*freq*2.3 + t*speed*1.7) * (amp*0.3);
+  }
+
+  function drawWaves(t){
+    var midY = H * 0.62;
+    var step = 5;
+    for (var l=0; l<waveLanes.length; l++){
+      var lane = waveLanes[l];
+      var baseY = midY + lane.dy;
+      var amp = H * lane.amp;
+
+      ctx.beginPath();
+      ctx.strokeStyle = lane.color;
+      ctx.lineWidth = lane.width;
+      ctx.globalAlpha = lane.alpha;
+      ctx.shadowBlur = lane.blur;
+      ctx.shadowColor = lane.color;
+
+      for (var x=0; x<=W; x+=step){
+        var y = waveY(x, t, baseY, amp, lane.freq, lane.speed);
+        if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  /* A diagonal streaming band of grain — dense, noisy core with a fuzzy, fading edge,
+     flowing continuously along its own axis (like the reference: a comet-tail of
+     static/sand cutting across the frame, not a flat horizontal fill). */
+  function bellRand(spread){
+    return ((Math.random()+Math.random()+Math.random()) - 1.5) / 1.5 * spread;
+  }
+
+  var BAND_ANGLE = -0.62; // radians, steeper diagonal so it reads clearly even on narrow/tall screens
+  var BAND_DIR   = { x: Math.cos(BAND_ANGLE), y: Math.sin(BAND_ANGLE) };
+  var BAND_PERP  = { x: -Math.sin(BAND_ANGLE), y: Math.cos(BAND_ANGLE) };
+  var BAND_CX    = W * 0.5;
+  var BAND_CY    = H * 0.56;
+  var BAND_LEN   = Math.sqrt(W*W + H*H) * 1.3;
+  var BAND_THICK = H * 0.14;
+
+  var SAND_COUNT = Math.round((W*H) / 40);
+  SAND_COUNT = Math.max(3000, Math.min(SAND_COUNT, 6500));
+
+  var sand = [];
+  for (var s=0; s<SAND_COUNT; s++){
+    sand.push({
+      u: rand(-BAND_LEN/2, BAND_LEN/2),
+      v: bellRand(1),
+      speed: rand(0.06, 0.2),
+      r: rand(0.3, 0.9),
+      alpha: rand(0.14, 0.34),
+      color: palette[Math.floor(Math.random()*palette.length)]
+    });
+  }
+
+  function drawSand(){
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i=0; i<sand.length; i++){
+      var g = sand[i];
+      g.u += g.speed;
+      if (g.u > BAND_LEN/2) g.u = -BAND_LEN/2;
+
+      var v = g.v * BAND_THICK;
+      var x = BAND_CX + BAND_DIR.x*g.u + BAND_PERP.x*v;
+      var y = BAND_CY + BAND_DIR.y*g.u + BAND_PERP.y*v;
+
+      if (x < -6 || x > W+6 || y < -6 || y > H+6) continue;
+
+      ctx.beginPath();
+      ctx.fillStyle = g.color;
+      ctx.globalAlpha = g.alpha;
+      ctx.arc(x, y, g.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function bgGradient(){
+    var g = ctx.createRadialGradient(W*0.5, H*0.32, 0, W*0.5, H*0.5, Math.max(W,H)*0.75);
+    g.addColorStop(0, '#3a250f');
+    g.addColorStop(0.55, '#241708');
+    g.addColorStop(1, '#120b06');
+    return g;
+  }
+
+  var gradientCache = bgGradient();
+  window.addEventListener('resize', function(){ gradientCache = bgGradient(); });
+
+  function loop(t){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = gradientCache;
+    ctx.fillRect(0,0,W,H);
+    drawDust();
+    drawWaves(t);
+    drawSand();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /* ---------- Registration form ---------- */
+  var form = document.getElementById('registerForm');
+  var submitBtn = document.getElementById('submitBtn');
+  var confirmBox = document.getElementById('confirmBox');
+  var pidValue = document.getElementById('pidValue');
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+
+    var firstName = document.getElementById('firstName').value.trim();
+    var lastName = document.getElementById('lastName').value.trim();
+    var venue = document.getElementById('venue').value;
+    if (!firstName || !lastName || !venue) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Connecting…';
+
+    function showConfirm(participantCode){
+      pidValue.textContent = participantCode;
+      form.style.opacity = '0';
+      form.style.transform = 'translateY(-10px)';
+      setTimeout(function(){
+        form.style.display = 'none';
+        confirmBox.classList.add('show');
+      }, 400);
+    }
+
+    function showError(){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Begin';
+      submitBtn.classList.add('shake');
+      setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
+    }
+
+    fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firstName: firstName, lastName: lastName, venue: venue })
+    })
+      .then(function(r){ if (!r.ok) throw new Error('registration failed'); return r.json(); })
+      // The response also includes {role, venue} for future stream routing —
+      // deliberately unused here so the participant's role stays hidden.
+      .then(function(data){ showConfirm(data.participantCode); })
+      .catch(function(){ showError(); });
+  });
+})();
+</script>
+
+</body>
+</html>
