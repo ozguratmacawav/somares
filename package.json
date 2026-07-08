@@ -4,6 +4,7 @@
   "private": true,
   "description": "SOMARES onboarding web app — participant registration and role assignment.",
   "dependencies": {
+    "@vercel/blob": "^2.6.1",
     "pg": "^8.22.0"
   }
 }

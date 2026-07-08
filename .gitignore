@@ -13,4 +13,8 @@ node_modules/
 *.docx
 *.pptx
 
+# Source audio files — already uploaded to Vercel Blob via scripts/upload-audio.js
+/Audio Files/
+/Layer_1_Whispers/
+
 .env*

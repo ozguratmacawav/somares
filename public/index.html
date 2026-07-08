@@ -275,6 +275,64 @@
 
   .pid span{ color:var(--silver); font-weight:600; }
 
+  .player{
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    opacity:0;
+    transform:translateY(10px);
+    transition:opacity 0.8s ease, transform 0.8s ease;
+  }
+  .player.show{ display:flex; opacity:1; transform:translateY(0); }
+
+  .pulse{
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    border:1px solid rgba(212,162,86,0.4);
+    position:relative;
+    margin-bottom:22px;
+  }
+  .pulse::before, .pulse::after{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    border:1px solid rgba(212,162,86,0.35);
+    animation:pulseRing 3.2s ease-out infinite;
+  }
+  .pulse::after{ animation-delay:1.6s; }
+  @keyframes pulseRing{
+    0%{ transform:scale(0.6); opacity:0.9; }
+    100%{ transform:scale(2.2); opacity:0; }
+  }
+
+  .listening{
+    font-size:13px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 26px;
+  }
+
+  button.mute{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(255,255,255,0.05);
+    color:var(--silver);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:background 0.2s ease, color 0.2s ease;
+  }
+  button.mute:hover{ background:rgba(255,255,255,0.1); }
+  button.mute svg{ width:20px; height:20px; }
+  button.mute.muted{ color:var(--text-dim); }
+  button.mute.muted #muteWave{ display:none; }
+
   footer{
     position:relative;
     z-index:2;
@@ -344,6 +402,17 @@
     <h2>You're Ready</h2>
     <p>Put on your headphones and wait for the sound to begin. The experience will start before you notice.</p>
     <div class="pid">Participant No <span id="pidValue">—</span></div>
+  </div>
+
+  <div class="player" id="playerBox">
+    <div class="pulse"></div>
+    <p class="listening">Listening…</p>
+    <button class="mute" id="muteBtn" aria-label="Mute">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+        <path id="muteWave" d="M16.5 8.5a5 5 0 010 7"/>
+      </svg>
+    </button>
   </div>
 </div>
 
@@ -525,10 +594,97 @@
   }
   requestAnimationFrame(loop);
 
+  /* ---------- Audio engine ---------- */
+  // Three layers, mixed live in the browser — no server-side audio streaming needed.
+  var Engine = (function(){
+    var audioCtx = null;
+    var gains = {};
+    var whisperPool = [];
+    var whisperTimer = null;
+    var muted = false;
+
+    // Must be called synchronously inside a real user-gesture handler (the
+    // "Begin" tap) — mobile browsers refuse to start audio otherwise.
+    function unlock(){
+      if (audioCtx) return;
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+      gains.ambience = audioCtx.createGain();
+      gains.mood = audioCtx.createGain();
+      gains.whisper = audioCtx.createGain();
+      gains.ambience.gain.value = 0.22;
+      gains.mood.gain.value = 0.32;
+      gains.whisper.gain.value = 0.9;
+      gains.ambience.connect(audioCtx.destination);
+      gains.mood.connect(audioCtx.destination);
+      gains.whisper.connect(audioCtx.destination);
+      // iOS/Safari sometimes create the context suspended even on a tap.
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function loadBuffer(url){
+      return fetch(url)
+        .then(function(r){ return r.arrayBuffer(); })
+        .then(function(ab){ return audioCtx.decodeAudioData(ab); });
+    }
+
+    function playLoop(buffer, gainNode){
+      var src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.connect(gainNode);
+      src.start();
+      return src;
+    }
+
+    function scheduleWhispers(){
+      if (!whisperPool.length) return;
+      var buf = whisperPool[Math.floor(Math.random() * whisperPool.length)];
+      var src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(gains.whisper);
+      src.start();
+      var nextIn = 18000 + Math.random() * 22000; // 18–40s between whispers
+      whisperTimer = setTimeout(scheduleWhispers, nextIn);
+    }
+
+    function start(manifest){
+      unlock();
+      var jobs = [];
+
+      manifest.ambiences.forEach(function(url){ jobs.push(loadBuffer(url).then(function(b){ playLoop(b, gains.ambience); })); });
+
+      var moodUrl = manifest.moods.calm || manifest.moods.neutral || Object.values(manifest.moods)[0];
+      if (moodUrl) jobs.push(loadBuffer(moodUrl).then(function(b){ playLoop(b, gains.mood); }));
+
+      manifest.whispers.forEach(function(url){
+        jobs.push(loadBuffer(url).then(function(b){ whisperPool.push(b); }));
+      });
+
+      return Promise.all(jobs).then(function(){
+        // First whisper arrives a little sooner so the layer reads as alive early on.
+        whisperTimer = setTimeout(scheduleWhispers, 6000 + Math.random() * 6000);
+      });
+    }
+
+    function toggleMute(){
+      muted = !muted;
+      var t = audioCtx.currentTime;
+      ['ambience','mood','whisper'].forEach(function(k){
+        gains[k].gain.setTargetAtTime(muted ? 0 : (k === 'whisper' ? 0.9 : (k === 'mood' ? 0.32 : 0.22)), t, 0.05);
+      });
+      return muted;
+    }
+
+    return { unlock: unlock, start: start, toggleMute: toggleMute };
+  })();
+
   /* ---------- Registration form ---------- */
   var form = document.getElementById('registerForm');
   var submitBtn = document.getElementById('submitBtn');
   var confirmBox = document.getElementById('confirmBox');
+  var playerBox = document.getElementById('playerBox');
+  var muteBtn = document.getElementById('muteBtn');
   var pidValue = document.getElementById('pidValue');
 
   form.addEventListener('submit', function(e){
@@ -538,6 +694,10 @@
     var lastName = document.getElementById('lastName').value.trim();
     var venue = document.getElementById('venue').value;
     if (!firstName || !lastName || !venue) return;
+
+    // Unlock audio synchronously, in direct response to this tap — before any
+    // network/async work — so mobile browsers allow playback later.
+    Engine.unlock();
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Connecting…';
@@ -550,6 +710,16 @@
         form.style.display = 'none';
         confirmBox.classList.add('show');
       }, 400);
+    }
+
+    function showPlayer(){
+      setTimeout(function(){
+        confirmBox.classList.remove('show');
+        setTimeout(function(){
+          confirmBox.style.display = 'none';
+          playerBox.classList.add('show');
+        }, 500);
+      }, 2200);
     }
 
     function showError(){
@@ -565,10 +735,21 @@
       body: JSON.stringify({ firstName: firstName, lastName: lastName, venue: venue })
     })
       .then(function(r){ if (!r.ok) throw new Error('registration failed'); return r.json(); })
-      // The response also includes {role, venue} for future stream routing —
-      // deliberately unused here so the participant's role stays hidden.
-      .then(function(data){ showConfirm(data.participantCode); })
+      // The role is used only to fetch this participant's own audio — the UI
+      // never displays it, so the role itself stays hidden from them.
+      .then(function(data){
+        showConfirm(data.participantCode);
+        showPlayer();
+        return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
+          .then(function(r){ return r.json(); })
+          .then(function(manifest){ return Engine.start(manifest); });
+      })
       .catch(function(){ showError(); });
+  });
+
+  muteBtn.addEventListener('click', function(){
+    var isMuted = Engine.toggleMute();
+    muteBtn.classList.toggle('muted', isMuted);
   });
 })();
 </script>
