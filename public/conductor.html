@@ -21,7 +21,7 @@
     background:var(--bg);
     color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Helvetica,Arial,sans-serif;
-    padding:32px 20px;
+    padding:32px 20px 80px;
   }
   h1{ font-size:20px; font-weight:600; margin:0 0 4px; }
   h2{ font-size:14px; font-weight:600; color:var(--amber-light); text-transform:uppercase; letter-spacing:0.06em; margin:0 0 14px; }
@@ -45,9 +45,22 @@
   select{
     width:100%; padding:10px 12px; font-size:14px; color:var(--text);
     background:rgba(255,255,255,0.05); border:1px solid var(--border);
-    border-radius:8px; outline:none; margin-bottom:20px; font-family:inherit;
+    border-radius:8px; outline:none; margin-bottom:18px; font-family:inherit;
   }
   select option{ color:#1a1006; }
+
+  /* Tabs */
+  .tabBar{
+    display:inline-flex; gap:2px; padding:3px; margin-bottom:20px;
+    background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:11px;
+  }
+  .tabBtn{
+    padding:8px 18px; font-size:13px; font-weight:600; letter-spacing:0.02em;
+    color:var(--text-dim); background:transparent; border:none; border-radius:8px; cursor:pointer;
+    font-family:inherit; transition:background 0.15s ease, color 0.15s ease;
+  }
+  .tabBtn:hover{ color:var(--text); }
+  .tabBtn.active{ background:linear-gradient(135deg,var(--amber-light),var(--amber)); color:#1a1006; }
 
   .panel{
     background:var(--panel); border:1px solid var(--border); border-radius:12px;
@@ -63,12 +76,7 @@
   .moodBtn:hover{ background:rgba(255,255,255,0.1); }
   .moodBtn.active{ background:linear-gradient(135deg,var(--amber-light),var(--amber)); color:#1a1006; border-color:transparent; }
 
-  .whisperGroup{ margin-bottom:16px; }
-  .whisperGroup:last-child{ margin-bottom:0; }
-  .whisperGroup .roleLabel{
-    font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px;
-  }
-  .whisperRow{ display:flex; flex-wrap:wrap; gap:8px; }
+  .whisperRow{ display:flex; flex-wrap:wrap; gap:8px; padding:10px 0 4px; }
   .whisperBtn{
     padding:8px 14px; font-size:13px; color:var(--text); background:rgba(255,255,255,0.05);
     border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:background 0.15s ease;
@@ -111,8 +119,9 @@
   }
   .uploadForm select, .uploadForm input[type="text"]{
     padding:8px 10px; font-size:13px; color:var(--text); background:rgba(255,255,255,0.05);
-    border:1px solid var(--border); border-radius:8px; outline:none; font-family:inherit;
+    border:1px solid var(--border); border-radius:8px; outline:none; font-family:inherit; margin-bottom:0;
   }
+  .uploadForm select{ width:auto; }
   .uploadForm select option{ color:#1a1006; }
   .uploadForm input[type="file"]{ font-size:12px; color:var(--text-dim); max-width:220px; }
   .uploadForm button{
@@ -120,20 +129,37 @@
     background:linear-gradient(135deg,var(--amber-light),var(--amber)); border:none; border-radius:8px; cursor:pointer;
   }
   .uploadForm button:disabled{ opacity:0.5; cursor:default; }
+  .panelMsg{ font-size:12px; color:var(--amber-light); margin:6px 0 4px; min-height:14px; }
 
-  .libGroup{ margin-top:18px; }
-  .libGroupTitle{ font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px; }
+  /* Folders — reused for both the whisper-trigger accordion and the library tree */
+  .folder{ border-bottom:1px solid var(--border); }
+  .folder:last-child{ border-bottom:none; }
+  .folder.nested{ border-bottom:none; padding-left:18px; }
+  .folderHeader{
+    display:flex; align-items:center; gap:8px; padding:10px 2px; cursor:pointer; user-select:none;
+  }
+  .folderHeader:hover .folderTitle{ color:var(--amber-light); }
+  .chevron{ font-size:10px; color:var(--text-dim); width:10px; flex-shrink:0; }
+  .folderTitle{ font-size:13px; color:var(--text); text-transform:capitalize; transition:color 0.15s ease; }
+  .folderCount{
+    font-size:11px; color:var(--text-dim); background:rgba(255,255,255,0.06);
+    padding:1px 8px; border-radius:999px; margin-left:auto;
+  }
+  .folderBody{ display:none; padding-left:18px; }
+  .folderBody.open{ display:block; }
+
   .libItem{
-    display:flex; align-items:center; gap:10px; padding:7px 10px; font-size:13px;
+    display:flex; align-items:center; gap:10px; padding:7px 8px; font-size:13px;
     border-bottom:1px solid var(--border);
   }
   .libItem:last-child{ border-bottom:none; }
-  .libItemLabel{ flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .libItemLabel{ flex:1; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .libDelete{
-    width:24px; height:24px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,0.04);
-    color:#e07a6b; cursor:pointer; font-size:14px; line-height:1; flex-shrink:0;
+    width:22px; height:22px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,0.04);
+    color:#e07a6b; cursor:pointer; font-size:13px; line-height:1; flex-shrink:0;
   }
   .libDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
+  .libEmpty{ color:var(--text-dim); font-size:12px; padding:6px 2px; }
 
   .toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
@@ -166,46 +192,56 @@
     <option value="fondazione-ago">Fondazione AGO</option>
   </select>
 
-  <div class="panel">
-    <h2>Who's here</h2>
-    <div class="targetBar" id="targetBar">Targeting: <b>everyone</b> at this venue</div>
-    <div id="presenceList"></div>
+  <div class="tabBar">
+    <button class="tabBtn active" data-tab="live">Live Control</button>
+    <button class="tabBtn" data-tab="library">Audio Library</button>
   </div>
 
-  <div class="panel">
-    <h2>Mood <span class="scopeNote">(always the whole venue)</span></h2>
-    <div class="moodRow" id="moodRow"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Sting</h2>
-    <div class="stingRow" id="stingRow"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Trigger a whisper</h2>
-    <div id="whisperGroups"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Audio Library</h2>
-    <p class="scopeNote" style="margin-bottom:14px;">Upload or remove clips for any layer — whispers, moods, or venue ambiences.</p>
-
-    <div class="uploadForm">
-      <select id="uploadLayer">
-        <option value="whisper">Whisper (per role)</option>
-        <option value="mood">Mood (shared)</option>
-        <option value="ambience">Ambience (per venue)</option>
-      </select>
-      <select id="uploadRole"></select>
-      <select id="uploadVenue" style="display:none;"></select>
-      <input type="text" id="uploadMoodKey" placeholder="mood key (e.g. tense)" style="display:none;">
-      <input type="file" id="uploadFile" accept="audio/*">
-      <button id="uploadBtn">Upload</button>
+  <div class="tabPanel" id="tab-live">
+    <div class="panel">
+      <h2>Who's here</h2>
+      <div class="targetBar" id="targetBar">Targeting: <b>everyone</b> at this venue</div>
+      <div id="presenceList"></div>
     </div>
-    <div class="panelMsg" id="uploadMsg"></div>
 
-    <div id="libraryList"></div>
+    <div class="panel">
+      <h2>Mood <span class="scopeNote">(always the whole venue)</span></h2>
+      <div class="moodRow" id="moodRow"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Sting</h2>
+      <div class="stingRow" id="stingRow"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Trigger a whisper</h2>
+      <div id="whisperGroups"></div>
+    </div>
+  </div>
+
+  <div class="tabPanel" id="tab-library" style="display:none;">
+    <div class="panel">
+      <h2>Upload</h2>
+      <div class="uploadForm">
+        <select id="uploadLayer">
+          <option value="whisper">Whisper (per role)</option>
+          <option value="mood">Mood (shared)</option>
+          <option value="ambience">Ambience (per venue)</option>
+        </select>
+        <select id="uploadRole"></select>
+        <select id="uploadVenue" style="display:none;"></select>
+        <input type="text" id="uploadMoodKey" placeholder="mood key (e.g. tense)" style="display:none;">
+        <input type="file" id="uploadFile" accept="audio/*">
+        <button id="uploadBtn">Upload</button>
+      </div>
+      <div class="panelMsg" id="uploadMsg"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Library</h2>
+      <div id="libraryList"></div>
+    </div>
   </div>
 </div>
 
@@ -243,11 +279,17 @@
   var people = [];
   var focused = null; // { code, name } or null = targeting everyone
   var presenceTimer = null;
+  var expandedFolders = {}; // key -> bool, persists across re-renders
 
   var ROLES = ['merchant','traveler','translator','innkeeper','guard','storyteller','pilgrim','caravan-guide','spice-trader','messenger'];
   var VENUES = [['yildiz-museum','Yıldız Museum'],['catalhoyuk','Çatalhöyük'],['ciurlionis','Čiurlionis Museum'],['fondazione-ago','Fondazione AGO']];
   ROLES.forEach(function(r){ var o = document.createElement('option'); o.value = r; o.textContent = r; uploadRole.appendChild(o); });
   VENUES.forEach(function(v){ var o = document.createElement('option'); o.value = v[0]; o.textContent = v[1]; uploadVenue.appendChild(o); });
+
+  function venueLabel(v){
+    var found = VENUES.find(function(x){ return x[0] === v; });
+    return found ? found[1] : v;
+  }
 
   function updateUploadFields(){
     var layer = uploadLayer.value;
@@ -257,6 +299,63 @@
   }
   uploadLayer.addEventListener('change', updateUploadFields);
   updateUploadFields();
+
+  /* ---------- Tabs ---------- */
+  var tabBtns = document.querySelectorAll('.tabBtn');
+  Array.prototype.forEach.call(tabBtns, function(btn){
+    btn.addEventListener('click', function(){
+      Array.prototype.forEach.call(tabBtns, function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('tab-live').style.display = btn.dataset.tab === 'live' ? '' : 'none';
+      document.getElementById('tab-library').style.display = btn.dataset.tab === 'library' ? '' : 'none';
+    });
+  });
+
+  /* ---------- Small folder/accordion component, reused for whisper
+     triggers and the library tree ---------- */
+  function groupBy(list, key){
+    var out = {};
+    list.forEach(function(item){ var k = item[key] || '—'; out[k] = out[k] || []; out[k].push(item); });
+    return out;
+  }
+
+  function folderEl(key, title, count, buildBody, opts){
+    opts = opts || {};
+    var isOpen = !!expandedFolders[key];
+    var folder = document.createElement('div');
+    folder.className = 'folder' + (opts.nested ? ' nested' : '');
+
+    var header = document.createElement('div');
+    header.className = 'folderHeader';
+    var chevron = document.createElement('span');
+    chevron.className = 'chevron';
+    chevron.textContent = isOpen ? '▾' : '▸';
+    var titleEl = document.createElement('span');
+    titleEl.className = 'folderTitle';
+    titleEl.textContent = title;
+    header.appendChild(chevron);
+    header.appendChild(titleEl);
+    if (count != null){
+      var countEl = document.createElement('span');
+      countEl.className = 'folderCount';
+      countEl.textContent = count;
+      header.appendChild(countEl);
+    }
+
+    var body = document.createElement('div');
+    body.className = 'folderBody' + (isOpen ? ' open' : '');
+    buildBody(body);
+
+    header.addEventListener('click', function(){
+      expandedFolders[key] = !expandedFolders[key];
+      body.classList.toggle('open');
+      chevron.textContent = expandedFolders[key] ? '▾' : '▸';
+    });
+
+    folder.appendChild(header);
+    folder.appendChild(body);
+    return folder;
+  }
 
   function showToast(msg){
     toast.textContent = msg;
@@ -374,71 +473,81 @@
     });
   }
 
-  function renderWhispers(){
+  function renderWhisperTriggers(){
     var whispers = assets.filter(function(a){ return a.layer === 'whisper'; });
-    var byRole = {};
-    whispers.forEach(function(w){
-      byRole[w.role] = byRole[w.role] || [];
-      byRole[w.role].push(w);
-    });
+    var byRole = groupBy(whispers, 'role');
     whisperGroups.innerHTML = '';
+    if (!whispers.length){
+      whisperGroups.innerHTML = '<div class="libEmpty">No whispers uploaded yet.</div>';
+      return;
+    }
     Object.keys(byRole).sort().forEach(function(role){
-      var group = document.createElement('div');
-      group.className = 'whisperGroup';
-      var label = document.createElement('div');
-      label.className = 'roleLabel';
-      label.textContent = role;
-      group.appendChild(label);
-      var row = document.createElement('div');
-      row.className = 'whisperRow';
-      byRole[role].forEach(function(w, i){
-        var btn = document.createElement('button');
-        btn.className = 'whisperBtn';
-        btn.textContent = (i + 1);
-        btn.addEventListener('click', function(){ sendTrigger(role, w.url, role + ' #' + (i + 1)); });
-        row.appendChild(btn);
-      });
-      group.appendChild(row);
-      whisperGroups.appendChild(group);
+      whisperGroups.appendChild(folderEl('trig-' + role, role, byRole[role].length, function(body){
+        var row = document.createElement('div');
+        row.className = 'whisperRow';
+        byRole[role].forEach(function(w, i){
+          var btn = document.createElement('button');
+          btn.className = 'whisperBtn';
+          btn.textContent = (i + 1);
+          btn.addEventListener('click', function(e){ e.stopPropagation(); sendTrigger(role, w.url, role + ' #' + (i + 1)); });
+          row.appendChild(btn);
+        });
+        body.appendChild(row);
+      }));
     });
   }
 
+  function fileRow(asset){
+    var row = document.createElement('div');
+    row.className = 'libItem';
+    var label = document.createElement('div');
+    label.className = 'libItemLabel';
+    label.textContent = asset.label;
+    var del = document.createElement('button');
+    del.className = 'libDelete';
+    del.textContent = '×';
+    del.title = 'Delete';
+    del.addEventListener('click', function(e){ e.stopPropagation(); deleteAsset(asset.id); });
+    row.appendChild(label);
+    row.appendChild(del);
+    return row;
+  }
+
   function renderLibrary(){
-    var groups = [
-      { title: 'Whispers', items: assets.filter(function(a){ return a.layer === 'whisper'; }), sub: function(a){ return a.role; } },
-      { title: 'Moods', items: assets.filter(function(a){ return a.layer === 'mood'; }), sub: function(a){ return a.mood_key; } },
-      { title: 'Ambiences', items: assets.filter(function(a){ return a.layer === 'ambience'; }), sub: function(a){ return a.venue; } }
-    ];
     libraryList.innerHTML = '';
-    groups.forEach(function(g){
-      if (!g.items.length) return;
-      var bySub = {};
-      g.items.forEach(function(a){ var k = g.sub(a) || '—'; bySub[k] = bySub[k] || []; bySub[k].push(a); });
-      var wrap = document.createElement('div');
-      wrap.className = 'libGroup';
-      var title = document.createElement('div');
-      title.className = 'libGroupTitle';
-      title.textContent = g.title;
-      wrap.appendChild(title);
-      Object.keys(bySub).sort().forEach(function(sub){
-        bySub[sub].forEach(function(a){
-          var row = document.createElement('div');
-          row.className = 'libItem';
-          var label = document.createElement('div');
-          label.className = 'libItemLabel';
-          label.textContent = sub + ' — ' + a.label;
-          var del = document.createElement('button');
-          del.className = 'libDelete';
-          del.textContent = '×';
-          del.title = 'Delete';
-          del.addEventListener('click', function(){ deleteAsset(a.id); });
-          row.appendChild(label);
-          row.appendChild(del);
-          wrap.appendChild(row);
-        });
+
+    var whispers = assets.filter(function(a){ return a.layer === 'whisper'; });
+    var byRole = groupBy(whispers, 'role');
+    libraryList.appendChild(folderEl('lib-whisper', 'Whispers', whispers.length, function(body){
+      Object.keys(byRole).sort().forEach(function(role){
+        body.appendChild(folderEl('lib-whisper-' + role, role, byRole[role].length, function(roleBody){
+          byRole[role].forEach(function(a){ roleBody.appendChild(fileRow(a)); });
+        }, { nested: true }));
       });
-      libraryList.appendChild(wrap);
-    });
+    }));
+
+    var moods = assets.filter(function(a){ return a.layer === 'mood'; });
+    libraryList.appendChild(folderEl('lib-mood', 'Moods', moods.length, function(body){
+      if (!moods.length){ body.appendChild(emptyRow()); return; }
+      moods.forEach(function(a){ body.appendChild(fileRow(a)); });
+    }));
+
+    var ambiences = assets.filter(function(a){ return a.layer === 'ambience'; });
+    var byVenue = groupBy(ambiences, 'venue');
+    libraryList.appendChild(folderEl('lib-ambience', 'Ambiences', ambiences.length, function(body){
+      Object.keys(byVenue).sort().forEach(function(venue){
+        body.appendChild(folderEl('lib-ambience-' + venue, venueLabel(venue), byVenue[venue].length, function(vBody){
+          byVenue[venue].forEach(function(a){ vBody.appendChild(fileRow(a)); });
+        }, { nested: true }));
+      });
+    }));
+  }
+
+  function emptyRow(){
+    var d = document.createElement('div');
+    d.className = 'libEmpty';
+    d.textContent = 'Nothing here yet.';
+    return d;
   }
 
   function deleteAsset(id){
@@ -451,7 +560,7 @@
       showToast('Deleted');
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderWhispers(); renderLibrary();
+      renderMoods(); renderStings(); renderWhisperTriggers(); renderLibrary();
     }).catch(function(){ showToast('Failed to delete'); });
   }
 
@@ -489,7 +598,7 @@
       uploadMoodKey.value = '';
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderWhispers(); renderLibrary();
+      renderMoods(); renderStings(); renderWhisperTriggers(); renderLibrary();
     }).catch(function(err){
       uploadMsg.textContent = (err && err.message) || 'Upload failed.';
     }).finally(function(){
@@ -519,7 +628,7 @@
   function renderAll(){
     renderMoods();
     renderStings();
-    renderWhispers();
+    renderWhisperTriggers();
     renderLibrary();
     refreshVenueState();
     setFocus(null);
