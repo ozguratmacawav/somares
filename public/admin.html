@@ -156,6 +156,25 @@
   }
   .panelBtn:hover{ background:rgba(212,162,86,0.18); border-color:var(--amber); }
   .panelMsg{ font-size:12px; color:var(--amber-light); margin-top:8px; min-height:14px; }
+
+  .panelSection{ margin-bottom:18px; }
+  .panelSection:last-child{ margin-bottom:0; }
+  .roleEditor{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .roleEditor select, .roleEditor input[type="text"]{
+    padding:6px 9px; font-size:12px; color:var(--text); background:rgba(255,255,255,0.05);
+    border:1px solid var(--border); border-radius:7px; outline:none; font-family:inherit;
+  }
+  .roleEditor select option{ color:#1a1006; }
+  .roleEditor button{
+    padding:6px 12px; font-size:12px; font-weight:600; border-radius:7px; cursor:pointer; border:none; font-family:inherit;
+  }
+  .roleEditor .saveRole{ color:#1a1006; background:linear-gradient(135deg,var(--amber-light),var(--amber)); }
+
+  .rowDelete{
+    width:24px; height:24px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,0.04);
+    color:#e07a6b; cursor:pointer; font-size:14px; line-height:1;
+  }
+  .rowDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
 </style>
 </head>
 <body>
@@ -227,7 +246,7 @@
     }
 
     var html = '<table><thead><tr>' +
-      '<th></th><th>ID</th><th>Name</th><th>Venue</th><th>Role</th><th>Group</th><th>Time</th>' +
+      '<th></th><th>ID</th><th>Name</th><th>Venue</th><th>Role</th><th>Group</th><th>Time</th><th></th>' +
       '</tr></thead><tbody>';
 
     rows.forEach(function(r){
@@ -240,9 +259,10 @@
         '<td><span class="role">' + r.role + '</span></td>' +
         '<td>#' + r.group_index + ' · pos ' + r.position_in_group + '</td>' +
         '<td>' + time + '</td>' +
+        '<td><button class="rowDelete" data-code="' + r.participant_code + '" data-name="' + escapeHtml(r.first_name + ' ' + r.last_name) + '" title="Delete">×</button></td>' +
         '</tr>';
       if (expandedCode === r.participant_code){
-        html += '<tr class="expandRow"><td colspan="7"><div class="interventionPanel" id="interventionPanel"></div></td></tr>';
+        html += '<tr class="expandRow"><td colspan="8"><div class="interventionPanel" id="interventionPanel"></div></td></tr>';
       }
     });
     html += '</tbody></table>';
@@ -256,12 +276,82 @@
         if (expandedCode) loadIntervention(tr.dataset.code, tr.dataset.role, tr.dataset.venue, tr.dataset.name);
       });
     });
+
+    Array.prototype.forEach.call(tableWrap.querySelectorAll('.rowDelete'), function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        deleteRegistration(btn.dataset.code, btn.dataset.name);
+      });
+    });
   }
+
+  function deleteRegistration(code, name){
+    if (!confirm('Delete ' + name + '\'s registration? This can\'t be undone.')) return;
+    fetch('/api/admin/delete-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': sessionStorage.getItem('somares_admin_key') },
+      body: JSON.stringify({ participantCode: code })
+    }).then(function(){
+      if (expandedCode === code) expandedCode = null;
+      return load(sessionStorage.getItem('somares_admin_key'));
+    }).then(render).catch(function(){});
+  }
+
+  var ROLES = ['merchant','traveler','translator','innkeeper','guard','storyteller','pilgrim','caravan-guide','spice-trader','messenger'];
 
   function loadIntervention(code, role, venue, name){
     var panel = document.getElementById('interventionPanel');
     if (!panel) return;
-    panel.innerHTML = '<div class="panelLoading">Loading ' + escapeHtml(name) + '’s whispers…</div>';
+
+    var roleSection = document.createElement('div');
+    roleSection.className = 'panelSection';
+    roleSection.innerHTML = '<div class="panelLabel">Change ' + escapeHtml(name) + '&rsquo;s role</div>';
+    var editor = document.createElement('div');
+    editor.className = 'roleEditor';
+    var sel = document.createElement('select');
+    ROLES.forEach(function(r){ var o = document.createElement('option'); o.value = r; o.textContent = r; if (r === role) o.selected = true; sel.appendChild(o); });
+    var customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = 'Custom…';
+    if (!ROLES.includes(role)) customOpt.selected = true;
+    sel.appendChild(customOpt);
+    var customInput = document.createElement('input');
+    customInput.type = 'text';
+    customInput.placeholder = 'custom role name';
+    customInput.style.display = ROLES.includes(role) ? 'none' : '';
+    if (!ROLES.includes(role)) customInput.value = role;
+    sel.addEventListener('change', function(){ customInput.style.display = sel.value === '__custom__' ? '' : 'none'; });
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'saveRole';
+    saveBtn.textContent = 'Save';
+    var roleMsg = document.createElement('div');
+    roleMsg.className = 'panelMsg';
+    saveBtn.addEventListener('click', function(){
+      var newRole = sel.value === '__custom__' ? customInput.value.trim() : sel.value;
+      if (!newRole) return;
+      fetch('/api/admin/update-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': sessionStorage.getItem('somares_admin_key') },
+        body: JSON.stringify({ participantCode: code, role: newRole })
+      }).then(function(r){
+        roleMsg.textContent = r.ok ? 'Saved.' : 'Failed to save.';
+        assetsByRole = {};
+        return load(sessionStorage.getItem('somares_admin_key'));
+      }).then(function(data){ lastData = data; }).catch(function(){ roleMsg.textContent = 'Failed to save.'; });
+    });
+    editor.appendChild(sel);
+    editor.appendChild(customInput);
+    editor.appendChild(saveBtn);
+    roleSection.appendChild(editor);
+    roleSection.appendChild(roleMsg);
+
+    var whisperSection = document.createElement('div');
+    whisperSection.className = 'panelSection';
+    whisperSection.innerHTML = '<div class="panelLoading">Loading ' + escapeHtml(name) + '&rsquo;s whispers…</div>';
+
+    panel.innerHTML = '';
+    panel.appendChild(roleSection);
+    panel.appendChild(whisperSection);
 
     var fetchAssets = assetsByRole[role]
       ? Promise.resolve(assetsByRole[role])
@@ -275,13 +365,14 @@
 
     fetchAssets.then(function(whispers){
       var html = '<div class="panelLabel">Send a whisper to ' + escapeHtml(name) + ' only</div><div class="panelRow">';
+      if (!whispers.length) html += '<span class="panelLoading">No whispers uploaded for this role.</span>';
       whispers.forEach(function(w, i){
         html += '<button class="panelBtn" data-url="' + encodeURI(w.url) + '">' + (i + 1) + '</button>';
       });
       html += '</div><div class="panelMsg" id="panelMsg"></div>';
-      panel.innerHTML = html;
+      whisperSection.innerHTML = html;
 
-      Array.prototype.forEach.call(panel.querySelectorAll('.panelBtn'), function(btn){
+      Array.prototype.forEach.call(whisperSection.querySelectorAll('.panelBtn'), function(btn){
         btn.addEventListener('click', function(){
           fetch('/api/admin/trigger', {
             method: 'POST',

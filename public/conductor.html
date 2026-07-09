@@ -40,14 +40,16 @@
   }
   #gate .err{ color:#e07a6b; font-size:13px; margin-top:10px; min-height:16px; }
 
-  #dashboard{ display:none; max-width:720px; margin:0 auto; }
+  #dashboard{ display:none; max-width:760px; margin:0 auto; }
 
   select{
     width:100%; padding:10px 12px; font-size:14px; color:var(--text);
     background:rgba(255,255,255,0.05); border:1px solid var(--border);
-    border-radius:8px; outline:none; margin-bottom:18px; font-family:inherit;
+    border-radius:8px; outline:none; font-family:inherit;
   }
   select option{ color:#1a1006; }
+
+  #venueSelect{ margin-bottom:18px; }
 
   /* Tabs */
   .tabBar{
@@ -66,6 +68,23 @@
     background:var(--panel); border:1px solid var(--border); border-radius:12px;
     padding:20px; margin-bottom:20px;
   }
+
+  /* Online Now chip bar — the one shared targeting control for every trigger panel */
+  .onlineBar{ margin-bottom:20px; }
+  .onlineBarLabel{ font-size:12px; color:var(--text-dim); margin-bottom:10px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px;
+    color:var(--text); background:rgba(255,255,255,0.05); border:1px solid var(--border);
+    border-radius:999px; cursor:pointer; font-family:inherit; transition:background 0.15s ease, color 0.15s ease;
+  }
+  .chip:hover{ background:rgba(255,255,255,0.09); }
+  .chip.selected{ background:linear-gradient(135deg,var(--amber-light),var(--amber)); color:#1a1006; border-color:transparent; }
+  .chip.everyoneChip{ font-weight:600; }
+  .chipDot{ width:7px; height:7px; border-radius:50%; background:#5fd67a; box-shadow:0 0 5px rgba(95,214,122,0.7); flex-shrink:0; }
+  .chip.selected .chipDot{ background:#1a1006; box-shadow:none; }
+  .chipRole{ opacity:0.7; font-size:11px; }
+  .chipNote{ font-size:12px; color:var(--text-dim); }
 
   .moodRow{ display:flex; flex-wrap:wrap; gap:8px; }
   .moodBtn{
@@ -92,28 +111,6 @@
 
   .scopeNote{ text-transform:none; letter-spacing:0; color:var(--text-dim); font-weight:400; font-size:12px; }
 
-  .targetBar{
-    font-size:13px; color:var(--text-dim); margin-bottom:14px;
-    padding:8px 12px; background:rgba(255,255,255,0.04); border-radius:8px;
-  }
-  .targetBar b{ color:var(--amber-light); }
-  .targetBar button{
-    margin-left:10px; padding:3px 10px; font-size:11px; color:var(--text);
-    background:rgba(255,255,255,0.08); border:1px solid var(--border); border-radius:999px; cursor:pointer;
-  }
-
-  .presenceRow{
-    display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px;
-    cursor:pointer; transition:background 0.15s ease;
-  }
-  .presenceRow:hover{ background:rgba(255,255,255,0.05); }
-  .presenceRow.focused{ background:rgba(212,162,86,0.15); }
-  .dot{ width:9px; height:9px; border-radius:50%; background:#6b6355; flex-shrink:0; }
-  .dot.active{ background:#5fd67a; box-shadow:0 0 6px rgba(95,214,122,0.7); }
-  .presenceName{ font-size:13px; color:var(--text); }
-  .presenceRole{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.04em; margin-left:auto; }
-  .presenceEmpty{ color:var(--text-dim); font-size:13px; padding:8px 0; }
-
   .uploadForm{
     display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:6px;
   }
@@ -131,7 +128,7 @@
   .uploadForm button:disabled{ opacity:0.5; cursor:default; }
   .panelMsg{ font-size:12px; color:var(--amber-light); margin:6px 0 4px; min-height:14px; }
 
-  /* Folders — reused for both the whisper-trigger accordion and the library tree */
+  /* Folders — reused for the whisper-trigger accordion and the library tree */
   .folder{ border-bottom:1px solid var(--border); }
   .folder:last-child{ border-bottom:none; }
   .folder.nested{ border-bottom:none; padding-left:18px; }
@@ -160,6 +157,36 @@
   }
   .libDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
   .libEmpty{ color:var(--text-dim); font-size:12px; padding:6px 2px; }
+
+  /* Registrations tab */
+  .regRow{
+    display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .regRow:last-child{ border-bottom:none; }
+  .regName{ font-size:13px; color:var(--text); }
+  .regTime{ font-size:11px; color:var(--text-dim); margin-left:auto; }
+  .roleBadge{
+    font-size:11px; font-weight:600; color:var(--amber-light); background:rgba(212,162,86,0.14);
+    padding:3px 10px; border-radius:999px; cursor:pointer; border:1px solid transparent;
+  }
+  .roleBadge:hover{ border-color:var(--amber); }
+  .roleEditor{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; width:100%; margin-top:8px; }
+  .roleEditor select, .roleEditor input[type="text"]{
+    padding:6px 9px; font-size:12px; color:var(--text); background:rgba(255,255,255,0.05);
+    border:1px solid var(--border); border-radius:7px; outline:none; font-family:inherit; width:auto;
+  }
+  .roleEditor select option{ color:#1a1006; }
+  .roleEditor button{
+    padding:6px 12px; font-size:12px; font-weight:600; border-radius:7px; cursor:pointer; border:none; font-family:inherit;
+  }
+  .roleEditor .saveRole{ color:#1a1006; background:linear-gradient(135deg,var(--amber-light),var(--amber)); }
+  .roleEditor .cancelRole{ color:var(--text); background:rgba(255,255,255,0.06); }
+  .regDelete{
+    width:24px; height:24px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,0.04);
+    color:#e07a6b; cursor:pointer; font-size:14px; line-height:1; flex-shrink:0;
+  }
+  .regDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
 
   .toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
@@ -194,29 +221,36 @@
 
   <div class="tabBar">
     <button class="tabBtn active" data-tab="live">Live Control</button>
+    <button class="tabBtn" data-tab="registrations">Registrations</button>
     <button class="tabBtn" data-tab="library">Audio Library</button>
   </div>
 
   <div class="tabPanel" id="tab-live">
-    <div class="panel">
-      <h2>Who's here</h2>
-      <div class="targetBar" id="targetBar">Targeting: <b>everyone</b> at this venue</div>
-      <div id="presenceList"></div>
+    <div class="onlineBar">
+      <div class="onlineBarLabel">Online now — pick who the actions below reach</div>
+      <div class="chips" id="onlineChips"></div>
     </div>
 
     <div class="panel">
-      <h2>Mood <span class="scopeNote">(always the whole venue)</span></h2>
+      <h2>Trigger a Mood <span class="scopeNote" id="moodScopeNote">— everyone at this venue</span></h2>
       <div class="moodRow" id="moodRow"></div>
     </div>
 
     <div class="panel">
-      <h2>Sting</h2>
+      <h2>Trigger a Sting</h2>
       <div class="stingRow" id="stingRow"></div>
     </div>
 
     <div class="panel">
-      <h2>Trigger a whisper</h2>
+      <h2>Trigger a Whisper</h2>
       <div id="whisperGroups"></div>
+    </div>
+  </div>
+
+  <div class="tabPanel" id="tab-registrations" style="display:none;">
+    <div class="panel">
+      <h2>Registrations <span class="scopeNote">at this venue</span></h2>
+      <div id="regList"></div>
     </div>
   </div>
 
@@ -259,10 +293,11 @@
   var gateErr = document.getElementById('gateErr');
   var venueSelect = document.getElementById('venueSelect');
   var moodRow = document.getElementById('moodRow');
+  var moodScopeNote = document.getElementById('moodScopeNote');
   var stingRow = document.getElementById('stingRow');
   var whisperGroups = document.getElementById('whisperGroups');
-  var presenceList = document.getElementById('presenceList');
-  var targetBar = document.getElementById('targetBar');
+  var onlineChips = document.getElementById('onlineChips');
+  var regList = document.getElementById('regList');
   var toast = document.getElementById('toast');
   var uploadLayer = document.getElementById('uploadLayer');
   var uploadRole = document.getElementById('uploadRole');
@@ -277,9 +312,10 @@
   var assets = [];
   var currentMood = null;
   var people = [];
-  var focused = null; // { code, name } or null = targeting everyone
+  var focused = null; // { code, name, role } or null = targeting everyone
   var presenceTimer = null;
-  var expandedFolders = {}; // key -> bool, persists across re-renders
+  var expandedFolders = {};
+  var editingRole = null; // participantCode currently showing the role editor
 
   var ROLES = ['merchant','traveler','translator','innkeeper','guard','storyteller','pilgrim','caravan-guide','spice-trader','messenger'];
   var VENUES = [['yildiz-museum','Yıldız Museum'],['catalhoyuk','Çatalhöyük'],['ciurlionis','Čiurlionis Museum'],['fondazione-ago','Fondazione AGO']];
@@ -289,6 +325,12 @@
   function venueLabel(v){
     var found = VENUES.find(function(x){ return x[0] === v; });
     return found ? found[1] : v;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
   }
 
   function updateUploadFields(){
@@ -302,17 +344,17 @@
 
   /* ---------- Tabs ---------- */
   var tabBtns = document.querySelectorAll('.tabBtn');
+  var tabPanels = { live: document.getElementById('tab-live'), registrations: document.getElementById('tab-registrations'), library: document.getElementById('tab-library') };
   Array.prototype.forEach.call(tabBtns, function(btn){
     btn.addEventListener('click', function(){
       Array.prototype.forEach.call(tabBtns, function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
-      document.getElementById('tab-live').style.display = btn.dataset.tab === 'live' ? '' : 'none';
-      document.getElementById('tab-library').style.display = btn.dataset.tab === 'library' ? '' : 'none';
+      Object.keys(tabPanels).forEach(function(k){ tabPanels[k].style.display = (k === btn.dataset.tab) ? '' : 'none'; });
+      if (btn.dataset.tab === 'registrations') renderRegistrations();
     });
   });
 
-  /* ---------- Small folder/accordion component, reused for whisper
-     triggers and the library tree ---------- */
+  /* ---------- Folder/accordion component (whisper triggers + library tree) ---------- */
   function groupBy(list, key){
     var out = {};
     list.forEach(function(item){ var k = item[key] || '—'; out[k] = out[k] || []; out[k].push(item); });
@@ -378,6 +420,59 @@
     return api('/api/admin/audio-assets').then(function(data){ assets = data.assets; });
   }
 
+  /* ---------- Online Now / targeting ---------- */
+  function renderOnlineChips(){
+    onlineChips.innerHTML = '';
+    var everyone = document.createElement('button');
+    everyone.className = 'chip everyoneChip' + (!focused ? ' selected' : '');
+    everyone.textContent = 'Everyone';
+    everyone.addEventListener('click', function(){ setFocus(null); });
+    onlineChips.appendChild(everyone);
+
+    var online = people.filter(function(p){ return p.active; });
+    if (!online.length){
+      var note = document.createElement('span');
+      note.className = 'chipNote';
+      note.textContent = 'No one online right now';
+      onlineChips.appendChild(note);
+      return;
+    }
+    online.forEach(function(p){
+      var chip = document.createElement('button');
+      chip.className = 'chip' + (focused && focused.code === p.participantCode ? ' selected' : '');
+      var dot = document.createElement('span');
+      dot.className = 'chipDot';
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(p.firstName + ' '));
+      var roleSpan = document.createElement('span');
+      roleSpan.className = 'chipRole';
+      roleSpan.textContent = p.role;
+      chip.appendChild(roleSpan);
+      chip.addEventListener('click', function(){
+        setFocus(focused && focused.code === p.participantCode ? null : { code: p.participantCode, name: p.firstName + ' ' + p.lastName, role: p.role });
+      });
+      onlineChips.appendChild(chip);
+    });
+  }
+
+  function setFocus(f){
+    focused = f;
+    moodScopeNote.textContent = focused ? ('— cue to ' + focused.name + ' only') : '— everyone at this venue';
+    renderOnlineChips();
+  }
+
+  function refreshPresence(){
+    return api('/api/admin/presence?venue=' + encodeURIComponent(venueSelect.value)).then(function(data){
+      people = data.people;
+      if (focused && !people.some(function(p){ return p.participantCode === focused.code && p.active; })){
+        setFocus(null);
+      } else {
+        renderOnlineChips();
+      }
+    }).catch(function(){});
+  }
+
+  /* ---------- Mood ---------- */
   function renderMoods(){
     var moods = assets.filter(function(a){ return a.layer === 'mood'; });
     var seen = {};
@@ -389,7 +484,8 @@
       btn.className = 'moodBtn';
       btn.textContent = m.mood_key;
       btn.dataset.mood = m.mood_key;
-      btn.addEventListener('click', function(){ setMood(m.mood_key); });
+      btn.dataset.url = m.url;
+      btn.addEventListener('click', function(){ fireMood(m.mood_key, m.url); });
       moodRow.appendChild(btn);
     });
     highlightMood();
@@ -397,12 +493,16 @@
 
   function highlightMood(){
     Array.prototype.forEach.call(moodRow.children, function(btn){
-      btn.classList.toggle('active', btn.dataset.mood === currentMood);
+      btn.classList.toggle('active', !focused && btn.dataset.mood === currentMood);
     });
   }
 
-  function setMood(moodKey){
-    // Mood is always venue-wide, regardless of who's focused.
+  function fireMood(moodKey, url){
+    if (focused){
+      // No per-person persistent mood state exists — send it as a one-shot cue instead.
+      sendTrigger(null, url, 'mood cue "' + moodKey + '"');
+      return;
+    }
     api('/api/admin/set-mood', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -410,55 +510,12 @@
     }).then(function(){
       currentMood = moodKey;
       highlightMood();
-      showToast('Mood set to "' + moodKey + '"');
+      showToast('Mood set to "' + moodKey + '" for everyone');
     }).catch(function(){ showToast('Failed to set mood'); });
   }
 
-  function renderPresence(){
-    api('/api/admin/presence?venue=' + encodeURIComponent(venueSelect.value)).then(function(data){
-      people = data.people;
-      if (focused && !people.some(function(p){ return p.participantCode === focused.code; })){
-        setFocus(null);
-      }
-      if (!people.length){
-        presenceList.innerHTML = '<div class="presenceEmpty">No one has registered here yet.</div>';
-        return;
-      }
-      presenceList.innerHTML = '';
-      people.forEach(function(p){
-        var row = document.createElement('div');
-        row.className = 'presenceRow' + (focused && focused.code === p.participantCode ? ' focused' : '');
-        var dot = document.createElement('div');
-        dot.className = 'dot' + (p.active ? ' active' : '');
-        var name = document.createElement('div');
-        name.className = 'presenceName';
-        name.textContent = p.firstName + ' ' + p.lastName + ' · #' + p.participantCode;
-        var role = document.createElement('div');
-        role.className = 'presenceRole';
-        role.textContent = p.role;
-        row.appendChild(dot);
-        row.appendChild(name);
-        row.appendChild(role);
-        row.addEventListener('click', function(){
-          setFocus(focused && focused.code === p.participantCode ? null : { code: p.participantCode, name: p.firstName + ' ' + p.lastName, role: p.role });
-        });
-        presenceList.appendChild(row);
-      });
-    }).catch(function(){});
-  }
-
-  function setFocus(f){
-    focused = f;
-    targetBar.innerHTML = focused
-      ? 'Targeting: <b>' + focused.name + '</b> (' + focused.role + ') only <button id="clearFocusBtn">Clear</button>'
-      : 'Targeting: <b>everyone</b> at this venue';
-    var clearBtn = document.getElementById('clearFocusBtn');
-    if (clearBtn) clearBtn.addEventListener('click', function(){ setFocus(null); });
-    renderPresence();
-  }
-
+  /* ---------- Sting ---------- */
   function renderStings(){
-    // Any mood-layer asset can double as an instant sting for everyone.
     var moods = assets.filter(function(a){ return a.layer === 'mood'; });
     var seen = {};
     stingRow.innerHTML = '';
@@ -468,11 +525,12 @@
       var btn = document.createElement('button');
       btn.className = 'stingBtn';
       btn.textContent = m.mood_key;
-      btn.addEventListener('click', function(){ sendTrigger(null, m.url, m.mood_key); });
+      btn.addEventListener('click', function(){ sendTrigger(null, m.url, 'sting "' + m.mood_key + '"'); });
       stingRow.appendChild(btn);
     });
   }
 
+  /* ---------- Whisper ---------- */
   function renderWhisperTriggers(){
     var whispers = assets.filter(function(a){ return a.layer === 'whisper'; });
     var byRole = groupBy(whispers, 'role');
@@ -497,6 +555,135 @@
     });
   }
 
+  function sendTrigger(targetRole, assetUrl, label){
+    var body = { venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl };
+    if (focused) body.targetParticipantCode = focused.code;
+    api('/api/admin/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(){
+      showToast('Sent: ' + label + (focused ? ' → ' + focused.name : ''));
+    }).catch(function(){ showToast('Failed to send trigger'); });
+  }
+
+  /* ---------- Registrations tab ---------- */
+  function renderRegistrations(){
+    var venue = venueSelect.value;
+    api('/api/admin/presence?venue=' + encodeURIComponent(venue)).then(function(data){
+      var rows = data.people;
+      regList.innerHTML = '';
+      if (!rows.length){
+        regList.innerHTML = '<div class="libEmpty">No registrations at this venue yet.</div>';
+        return;
+      }
+      rows.forEach(function(p){
+        var row = document.createElement('div');
+        row.className = 'regRow';
+
+        var dot = document.createElement('span');
+        dot.className = 'dot' + (p.active ? ' active' : '');
+        dot.style.width = '8px'; dot.style.height = '8px'; dot.style.borderRadius = '50%';
+        dot.style.background = p.active ? '#5fd67a' : '#6b6355';
+        dot.style.flexShrink = '0';
+
+        var name = document.createElement('span');
+        name.className = 'regName';
+        name.textContent = p.firstName + ' ' + p.lastName + ' · #' + p.participantCode;
+
+        var roleBadge = document.createElement('span');
+        roleBadge.className = 'roleBadge';
+        roleBadge.textContent = p.role;
+        roleBadge.addEventListener('click', function(){
+          editingRole = (editingRole === p.participantCode) ? null : p.participantCode;
+          renderRegistrations();
+        });
+
+        var time = document.createElement('span');
+        time.className = 'regTime';
+        time.textContent = new Date(p.createdAt).toLocaleString();
+
+        var del = document.createElement('button');
+        del.className = 'regDelete';
+        del.textContent = '×';
+        del.title = 'Delete registration';
+        del.addEventListener('click', function(){ deleteRegistration(p.participantCode, p.firstName + ' ' + p.lastName); });
+
+        row.appendChild(dot);
+        row.appendChild(name);
+        row.appendChild(roleBadge);
+        row.appendChild(time);
+        row.appendChild(del);
+
+        if (editingRole === p.participantCode){
+          var editor = document.createElement('div');
+          editor.className = 'roleEditor';
+          var sel = document.createElement('select');
+          ROLES.forEach(function(r){ var o = document.createElement('option'); o.value = r; o.textContent = r; if (r === p.role) o.selected = true; sel.appendChild(o); });
+          var customOpt = document.createElement('option');
+          customOpt.value = '__custom__';
+          customOpt.textContent = 'Custom…';
+          if (!ROLES.includes(p.role)) customOpt.selected = true;
+          sel.appendChild(customOpt);
+
+          var customInput = document.createElement('input');
+          customInput.type = 'text';
+          customInput.placeholder = 'custom role name';
+          customInput.style.display = ROLES.includes(p.role) ? 'none' : '';
+          if (!ROLES.includes(p.role)) customInput.value = p.role;
+
+          sel.addEventListener('change', function(){
+            customInput.style.display = sel.value === '__custom__' ? '' : 'none';
+          });
+
+          var saveBtn = document.createElement('button');
+          saveBtn.className = 'saveRole';
+          saveBtn.textContent = 'Save';
+          saveBtn.addEventListener('click', function(){
+            var newRole = sel.value === '__custom__' ? customInput.value.trim() : sel.value;
+            if (!newRole) return;
+            api('/api/admin/update-role', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ participantCode: p.participantCode, role: newRole })
+            }).then(function(){
+              showToast('Role updated');
+              editingRole = null;
+              renderRegistrations();
+            }).catch(function(){ showToast('Failed to update role'); });
+          });
+
+          var cancelBtn = document.createElement('button');
+          cancelBtn.className = 'cancelRole';
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', function(){ editingRole = null; renderRegistrations(); });
+
+          editor.appendChild(sel);
+          editor.appendChild(customInput);
+          editor.appendChild(saveBtn);
+          editor.appendChild(cancelBtn);
+          row.appendChild(editor);
+        }
+
+        regList.appendChild(row);
+      });
+    }).catch(function(){});
+  }
+
+  function deleteRegistration(code, name){
+    if (!confirm('Delete ' + name + '\'s registration? This can\'t be undone.')) return;
+    api('/api/admin/delete-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantCode: code })
+    }).then(function(){
+      showToast('Deleted');
+      renderRegistrations();
+      refreshPresence();
+    }).catch(function(){ showToast('Failed to delete'); });
+  }
+
+  /* ---------- Library tab ---------- */
   function fileRow(asset){
     var row = document.createElement('div');
     row.className = 'libItem';
@@ -511,6 +698,13 @@
     row.appendChild(label);
     row.appendChild(del);
     return row;
+  }
+
+  function emptyRow(){
+    var d = document.createElement('div');
+    d.className = 'libEmpty';
+    d.textContent = 'Nothing here yet.';
+    return d;
   }
 
   function renderLibrary(){
@@ -541,13 +735,6 @@
         }, { nested: true }));
       });
     }));
-  }
-
-  function emptyRow(){
-    var d = document.createElement('div');
-    d.className = 'libEmpty';
-    d.textContent = 'Nothing here yet.';
-    return d;
   }
 
   function deleteAsset(id){
@@ -606,18 +793,7 @@
     });
   });
 
-  function sendTrigger(targetRole, assetUrl, label){
-    var body = { venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl };
-    if (focused) body.targetParticipantCode = focused.code;
-    api('/api/admin/trigger', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function(){
-      showToast('Sent: ' + label + (focused ? ' → ' + focused.name : ''));
-    }).catch(function(){ showToast('Failed to send trigger'); });
-  }
-
+  /* ---------- Boot ---------- */
   function refreshVenueState(){
     fetch('/api/venue-state?venue=' + encodeURIComponent(venueSelect.value) + '&role=merchant&since=999999999')
       .then(function(r){ return r.json(); })
@@ -632,8 +808,13 @@
     renderLibrary();
     refreshVenueState();
     setFocus(null);
+    editingRole = null;
+    refreshPresence();
     if (presenceTimer) clearInterval(presenceTimer);
-    presenceTimer = setInterval(renderPresence, 5000);
+    presenceTimer = setInterval(function(){
+      refreshPresence();
+      if (tabPanels.registrations.style.display !== 'none') renderRegistrations();
+    }, 5000);
   }
 
   venueSelect.addEventListener('change', renderAll);

@@ -30,7 +30,8 @@ module.exports = async (req, res) => {
       lastName: r.last_name,
       role: r.role,
       active: (now - new Date(r.last_seen_at).getTime()) < ACTIVE_WINDOW_MS,
-      lastSeenAt: r.last_seen_at
+      lastSeenAt: r.last_seen_at,
+      createdAt: r.created_at
     }));
     res.status(200).json({ people });
   } catch (err) {
