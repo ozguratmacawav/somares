@@ -687,6 +687,23 @@
       }
     }
 
+    // If an operator changes this participant's role mid-session, fetch that
+    // role's whisper pool and swap it in — otherwise they'd keep hearing
+    // (and triggering) their old role's whispers indefinitely.
+    function switchRole(newRole){
+      var oldRole = role;
+      role = newRole;
+      fetch('/api/audio-manifest?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(newRole))
+        .then(function(r){ return r.json(); })
+        .then(function(manifest){
+          return Promise.all(manifest.whispers.map(loadBuffer));
+        })
+        .then(function(buffers){
+          whisperPool = buffers;
+        })
+        .catch(function(){ role = oldRole; });
+    }
+
     function pollVenueState(){
       if (!venue || !role) return;
       var url = '/api/venue-state?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(role) + '&since=' + lastTriggerId;
@@ -695,6 +712,7 @@
         .then(function(r){ return r.json(); })
         .then(function(data){
           if (data.mood) setMood(data.mood);
+          if (data.role && data.role !== role) switchRole(data.role);
           (data.triggers || []).forEach(function(trig){
             lastTriggerId = Math.max(lastTriggerId, trig.id);
             loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });

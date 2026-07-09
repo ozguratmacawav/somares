@@ -138,6 +138,14 @@
   .folderHeader:hover .folderTitle{ color:var(--amber-light); }
   .chevron{ font-size:10px; color:var(--text-dim); width:10px; flex-shrink:0; }
   .folderTitle{ font-size:13px; color:var(--text); text-transform:capitalize; transition:color 0.15s ease; }
+  .roleOnline{ font-weight:700; color:var(--amber-light); }
+  .onlineInline{
+    font-weight:400; font-size:11px; color:var(--text-dim); text-transform:none; margin-left:8px;
+  }
+  .miniDot{
+    display:inline-block; width:6px; height:6px; border-radius:50%; background:#5fd67a;
+    box-shadow:0 0 4px rgba(95,214,122,0.7); margin-right:4px;
+  }
   .folderCount{
     font-size:11px; color:var(--text-dim); background:rgba(255,255,255,0.06);
     padding:1px 8px; border-radius:999px; margin-left:auto;
@@ -374,7 +382,7 @@
     chevron.textContent = isOpen ? '▾' : '▸';
     var titleEl = document.createElement('span');
     titleEl.className = 'folderTitle';
-    titleEl.textContent = title;
+    if (title instanceof Node) titleEl.appendChild(title); else titleEl.textContent = title;
     header.appendChild(chevron);
     header.appendChild(titleEl);
     if (count != null){
@@ -469,6 +477,7 @@
       } else {
         renderOnlineChips();
       }
+      renderWhisperTriggers();
     }).catch(function(){});
   }
 
@@ -531,6 +540,27 @@
   }
 
   /* ---------- Whisper ---------- */
+  function roleTitleFrag(role){
+    var frag = document.createDocumentFragment();
+    var online = people.filter(function(p){ return p.active && p.role === role; });
+    var roleSpan = document.createElement('span');
+    roleSpan.textContent = role;
+    if (online.length) roleSpan.className = 'roleOnline';
+    frag.appendChild(roleSpan);
+    if (online.length){
+      var names = document.createElement('span');
+      names.className = 'onlineInline';
+      online.forEach(function(p, i){
+        var dot = document.createElement('span');
+        dot.className = 'miniDot';
+        names.appendChild(dot);
+        names.appendChild(document.createTextNode(p.firstName + ' · #' + p.participantCode + (i < online.length - 1 ? '   ' : '')));
+      });
+      frag.appendChild(names);
+    }
+    return frag;
+  }
+
   function renderWhisperTriggers(){
     var whispers = assets.filter(function(a){ return a.layer === 'whisper'; });
     var byRole = groupBy(whispers, 'role');
@@ -540,7 +570,7 @@
       return;
     }
     Object.keys(byRole).sort().forEach(function(role){
-      whisperGroups.appendChild(folderEl('trig-' + role, role, byRole[role].length, function(body){
+      whisperGroups.appendChild(folderEl('trig-' + role, roleTitleFrag(role), byRole[role].length, function(body){
         var row = document.createElement('div');
         row.className = 'whisperRow';
         byRole[role].forEach(function(w, i){
