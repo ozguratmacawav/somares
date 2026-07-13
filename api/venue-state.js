@@ -26,6 +26,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       mood: state.moodKey,
       startedAt: state.startedAt,
+      ambienceMuted: state.ambienceMuted,
       // Only present when it differs from what the client sent, so it can
       // pick up an operator's role change and reload the right whisper pool.
       role: currentRole && currentRole !== role ? currentRole : undefined,

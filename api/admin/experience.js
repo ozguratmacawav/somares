@@ -1,4 +1,4 @@
-const { ensureSchema, startExperience, resetExperience } = require('../../lib/db');
+const { ensureSchema, startExperience, resetExperience, setAmbienceMute } = require('../../lib/db');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -23,6 +23,12 @@ module.exports = async (req, res) => {
 
     if (action === 'reset') {
       await resetExperience(venue);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'setAmbienceMute') {
+      await setAmbienceMute(venue, req.body.muted || []);
       res.status(200).json({ ok: true });
       return;
     }

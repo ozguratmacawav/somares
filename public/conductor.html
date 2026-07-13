@@ -85,8 +85,13 @@
   .chip.selected .chipDot{ background:#1a1006; box-shadow:none; }
   .chipRole{ opacity:0.7; font-size:11px; }
   .chipNote{ font-size:12px; color:var(--text-dim); }
-  .bgTrackRow{ font-size:13px; color:var(--text); padding:6px 0; border-bottom:1px solid var(--border); }
+  .bgTrackRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--text); padding:8px 0; border-bottom:1px solid var(--border); }
   .bgTrackRow:last-child{ border-bottom:none; }
+  .bgToggle{
+    padding:6px 16px; font-size:12px; font-weight:700; border-radius:20px; cursor:pointer; font-family:inherit;
+    background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--text-dim);
+  }
+  .bgToggle.on{ background:linear-gradient(135deg,var(--amber-light),var(--amber)); color:#1a1006; border-color:transparent; }
 
   .moodRow{ display:flex; flex-wrap:wrap; gap:8px; }
   .moodBtn{
@@ -299,7 +304,7 @@
     </div>
 
     <div class="panel">
-      <h2>Background <span class="scopeNote">— always on for everyone, not something you trigger</span></h2>
+      <h2>Background <span class="scopeNote">— on/off for everyone, any combination, independent of the layers below</span></h2>
       <div id="backgroundList"></div>
       <button class="scoreBtn" id="backgroundRestartBtn" style="margin-top:10px;">Restart background for everyone</button>
     </div>
@@ -437,7 +442,7 @@
   var assets = [];
   var currentMood = null;
   var people = [];
-  var focused = null; // { code, name, role } or null = targeting everyone
+  var selected = []; // [] = everyone; array of { code, name, role } = only these people (multi-select)
   var presenceTimer = null;
   var expandedFolders = {};
   var editingRole = null; // participantCode currently showing the role editor
@@ -549,13 +554,37 @@
     return api('/api/admin/audio-assets').then(function(data){ assets = data.assets; });
   }
 
-  /* ---------- Online Now / targeting ---------- */
+  /* ---------- Online Now / targeting (multi-select: everyone, or just the chips you pick) ---------- */
+  function isSelectedCode(code){
+    return selected.some(function(s){ return s.code === code; });
+  }
+
+  function updateScopeNote(){
+    moodScopeNote.textContent = selected.length
+      ? ('— cue to ' + selected.length + ' selected (' + selected.map(function(s){ return s.name; }).join(', ') + ')')
+      : '— everyone at this venue';
+  }
+
+  function setSelection(list){
+    selected = list;
+    updateScopeNote();
+    renderOnlineChips();
+  }
+
+  function toggleSelect(p){
+    var idx = selected.findIndex(function(s){ return s.code === p.participantCode; });
+    if (idx === -1) selected.push({ code: p.participantCode, name: p.firstName + ' ' + p.lastName, role: p.role });
+    else selected.splice(idx, 1);
+    updateScopeNote();
+    renderOnlineChips();
+  }
+
   function renderOnlineChips(){
     onlineChips.innerHTML = '';
     var everyone = document.createElement('button');
-    everyone.className = 'chip everyoneChip' + (!focused ? ' selected' : '');
+    everyone.className = 'chip everyoneChip' + (!selected.length ? ' selected' : '');
     everyone.textContent = 'Everyone';
-    everyone.addEventListener('click', function(){ setFocus(null); });
+    everyone.addEventListener('click', function(){ setSelection([]); });
     onlineChips.appendChild(everyone);
 
     var online = people.filter(function(p){ return p.active; });
@@ -568,7 +597,7 @@
     }
     online.forEach(function(p){
       var chip = document.createElement('button');
-      chip.className = 'chip' + (focused && focused.code === p.participantCode ? ' selected' : '');
+      chip.className = 'chip' + (isSelectedCode(p.participantCode) ? ' selected' : '');
       var dot = document.createElement('span');
       dot.className = 'chipDot';
       chip.appendChild(dot);
@@ -577,33 +606,34 @@
       roleSpan.className = 'chipRole';
       roleSpan.textContent = p.role;
       chip.appendChild(roleSpan);
-      chip.addEventListener('click', function(){
-        setFocus(focused && focused.code === p.participantCode ? null : { code: p.participantCode, name: p.firstName + ' ' + p.lastName, role: p.role });
-      });
+      chip.addEventListener('click', function(){ toggleSelect(p); });
       onlineChips.appendChild(chip);
     });
-  }
-
-  function setFocus(f){
-    focused = f;
-    moodScopeNote.textContent = focused ? ('— cue to ' + focused.name + ' only') : '— everyone at this venue';
-    renderOnlineChips();
   }
 
   function refreshPresence(){
     return api('/api/admin/presence?venue=' + encodeURIComponent(venueSelect.value)).then(function(data){
       people = data.people;
-      if (focused && !people.some(function(p){ return p.participantCode === focused.code && p.active; })){
-        setFocus(null);
-      } else {
-        renderOnlineChips();
-      }
+      selected = selected.filter(function(s){
+        return people.some(function(p){ return p.participantCode === s.code && p.active; });
+      });
+      updateScopeNote();
+      renderOnlineChips();
       renderWhisperTriggers();
       if (tabPanels.score.style.display !== 'none'){ renderScoreSetup(); renderScoreStep(); }
     }).catch(function(){});
   }
 
-  /* ---------- Background (ambience layer — automatic, not a trigger) ---------- */
+  /* ---------- Background (ambience layer — Dem/Low Hum, independently on/off) ---------- */
+  var bgMuted = []; // track labels currently silenced for everyone at this venue
+
+  function refreshBackgroundState(){
+    fetch('/api/venue-state?venue=' + encodeURIComponent(venueSelect.value) + '&role=merchant&since=999999999')
+      .then(function(r){ return r.json(); })
+      .then(function(data){ bgMuted = data.ambienceMuted || []; renderBackground(); })
+      .catch(function(){});
+  }
+
   function renderBackground(){
     var tracks = assets.filter(function(a){ return a.layer === 'ambience' && a.venue === venueSelect.value; });
     backgroundListEl.innerHTML = '';
@@ -612,11 +642,36 @@
       return;
     }
     tracks.forEach(function(t){
+      var isMuted = bgMuted.indexOf(t.label) !== -1;
       var row = document.createElement('div');
       row.className = 'bgTrackRow';
-      row.textContent = t.label + '  ·  relative volume ' + t.volume;
+      var label = document.createElement('span');
+      label.textContent = t.label + '  ·  relative volume ' + t.volume;
+      var toggle = document.createElement('button');
+      toggle.className = 'bgToggle' + (isMuted ? '' : ' on');
+      toggle.textContent = isMuted ? 'Off' : 'On';
+      toggle.addEventListener('click', function(){ toggleAmbienceTrack(t.label); });
+      row.appendChild(label);
+      row.appendChild(toggle);
       backgroundListEl.appendChild(row);
     });
+  }
+
+  // Each track can be switched on/off independently and in any combination —
+  // both playing together, just one, or neither — live, for everyone at the
+  // venue, without restarting anyone's session.
+  function toggleAmbienceTrack(label){
+    var idx = bgMuted.indexOf(label);
+    if (idx === -1) bgMuted.push(label); else bgMuted.splice(idx, 1);
+    var nowMuted = bgMuted.indexOf(label) !== -1;
+    renderBackground();
+    api('/api/admin/experience', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setAmbienceMute', venue: venueSelect.value, muted: bgMuted })
+    }).then(function(){
+      showToast(label + (nowMuted ? ' turned off' : ' turned on') + ' for everyone');
+    }).catch(function(){ showToast('Failed to update background'); });
   }
 
   backgroundRestartBtn.addEventListener('click', function(){
@@ -650,12 +705,12 @@
 
   function highlightMood(){
     Array.prototype.forEach.call(moodRow.children, function(btn){
-      btn.classList.toggle('active', !focused && btn.dataset.mood === currentMood);
+      btn.classList.toggle('active', !selected.length && btn.dataset.mood === currentMood);
     });
   }
 
   function fireMood(moodKey, url){
-    if (focused){
+    if (selected.length){
       // No per-person persistent mood state exists — send it as a one-shot cue instead.
       sendTrigger(null, url, 'mood cue "' + moodKey + '"');
       return;
@@ -705,14 +760,23 @@
   }
 
   function sendTexture(assetUrl, label){
-    var body = { venue: venueSelect.value, assetUrl: assetUrl, channel: 'texture' };
-    if (focused) body.targetParticipantCode = focused.code;
+    if (selected.length){
+      selected.forEach(function(s){
+        api('/api/admin/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ venue: venueSelect.value, assetUrl: assetUrl, channel: 'texture', targetParticipantCode: s.code })
+        }).catch(function(){});
+      });
+      showToast('Texture: ' + label + ' → ' + selected.length + ' selected');
+      return;
+    }
     api('/api/admin/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ venue: venueSelect.value, assetUrl: assetUrl, channel: 'texture' })
     }).then(function(){
-      showToast('Texture: ' + label + (focused ? ' → ' + focused.name : ' (everyone)'));
+      showToast('Texture: ' + label + ' (everyone)');
     }).catch(function(){ showToast('Failed to send texture'); });
   }
 
@@ -762,15 +826,27 @@
     });
   }
 
+  // targetRole scopes a whisper to whoever currently holds that role/position;
+  // an explicit multi-select overrides that and goes straight to just those
+  // people instead, regardless of role.
   function sendTrigger(targetRole, assetUrl, label){
-    var body = { venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl };
-    if (focused) body.targetParticipantCode = focused.code;
+    if (selected.length){
+      selected.forEach(function(s){
+        api('/api/admin/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ venue: venueSelect.value, assetUrl: assetUrl, targetParticipantCode: s.code })
+        }).catch(function(){});
+      });
+      showToast('Sent: ' + label + ' → ' + selected.length + ' selected');
+      return;
+    }
     api('/api/admin/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ venue: venueSelect.value, targetRole: targetRole, assetUrl: assetUrl })
     }).then(function(){
-      showToast('Sent: ' + label + (focused ? ' → ' + focused.name : ''));
+      showToast('Sent: ' + label);
     }).catch(function(){ showToast('Failed to send trigger'); });
   }
 
@@ -1068,7 +1144,7 @@
     if (step.sound){
       var lbl = document.createElement('span');
       lbl.className = 'scoreSoundLabel';
-      lbl.textContent = 'Set background to "' + step.sound + '":';
+      lbl.textContent = 'Room sound cue for this step: "' + step.sound + '"';
       scoreSoundRowEl.appendChild(lbl);
       var moods = assets.filter(function(a){ return a.layer === 'mood'; });
       var seen = {};
@@ -1283,7 +1359,7 @@
       showToast('Deleted');
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); renderBackground();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); refreshBackgroundState();
     }).catch(function(){ showToast('Failed to delete'); });
   }
 
@@ -1322,7 +1398,7 @@
       uploadMoodKey.value = '';
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); renderBackground();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); refreshBackgroundState();
     }).catch(function(err){
       uploadMsg.textContent = (err && err.message) || 'Upload failed.';
     }).finally(function(){
@@ -1339,7 +1415,7 @@
   }
 
   function renderAll(){
-    renderBackground();
+    refreshBackgroundState();
     renderMoods();
     renderStings();
     renderTextures();
@@ -1358,7 +1434,13 @@
 
   venueSelect.addEventListener('change', renderAll);
 
+  // Guards against a stale/failing call clobbering adminKey after a
+  // different, already-successful call unlocked the dashboard — can
+  // otherwise happen if the auto-login (below) and a manual Sign In race.
+  var unlocked = false;
+
   function unlock(username, key){
+    if (unlocked) return;
     gateErr.textContent = '';
     if (username !== 'admin'){
       gateErr.textContent = 'Invalid username or password.';
@@ -1368,12 +1450,14 @@
     adminKey = key;
     loadAssets()
       .then(function(){
+        unlocked = true;
         sessionStorage.setItem('somares_admin_key', key);
         gate.style.display = 'none';
         dashboard.style.display = 'block';
         renderAll();
       })
       .catch(function(){
+        if (unlocked) return;
         gateErr.textContent = 'Invalid username or password.';
         unlockBtn.disabled = false;
         adminKey = null;

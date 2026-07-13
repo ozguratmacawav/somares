@@ -669,6 +669,21 @@
       return src;
     }
 
+    // Like playLoop, but always gives the track its own gain node (even at
+    // volume 1) so it can be muted/unmuted independently later — used for
+    // ambience tracks, which the conductor can turn on/off per-track live.
+    function playLoopIndependent(buffer, gainNode, volume){
+      var g = audioCtx.createGain();
+      g.gain.value = volume != null ? volume : 1;
+      g.connect(gainNode);
+      var src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.connect(g);
+      src.start();
+      return { source: src, gain: g };
+    }
+
     function playOneShot(buffer, gainNode){
       var src = audioCtx.createBufferSource();
       src.buffer = buffer;
@@ -786,6 +801,7 @@
       fetch(url)
         .then(function(r){ return r.json(); })
         .then(function(data){
+          applyAmbienceMute(data.ambienceMuted || []);
           if (!started){
             if (data.startedAt) beginPlayback();
             return;
@@ -839,14 +855,36 @@
       });
     }
 
-    // Ambience: every track loops forever, each at its own relative volume.
-    // Kept separate from beginPlayback so a conductor's "restart background"
-    // trigger can relaunch it mid-session without touching mood/whisper/texture.
+    // Ambience: every track loops forever, each at its own relative volume,
+    // each with its own gain node — so the conductor can independently mute
+    // just Dem, just Low Hum, both, or neither, live, without restarting
+    // anyone's playback. Kept separate from beginPlayback so a "restart
+    // background" trigger can relaunch it mid-session on its own.
+    var lastAmbienceMuted = [];
+
     function startAmbience(){
-      ambienceSources.forEach(function(src){ try { src.stop(); } catch (e){} });
+      ambienceSources.forEach(function(node){ try { node.source.stop(); } catch (e){} });
       ambienceSources = [];
       ambienceTracks.forEach(function(track){
-        if (track._buf) ambienceSources.push(playLoop(track._buf, gains.ambience, track.volume));
+        if (track._buf){
+          var node = playLoopIndependent(track._buf, gains.ambience, track.volume);
+          node.label = track.label;
+          node.volume = track.volume != null ? track.volume : 1;
+          ambienceSources.push(node);
+        }
+      });
+      applyAmbienceMute(lastAmbienceMuted);
+    }
+
+    // mutedLabels: track labels (e.g. "Dem.mp3") that should currently be
+    // silent — every other ambience track ramps to its normal volume.
+    function applyAmbienceMute(mutedLabels){
+      lastAmbienceMuted = mutedLabels || [];
+      if (!audioCtx) return;
+      var t = audioCtx.currentTime;
+      ambienceSources.forEach(function(node){
+        var shouldMute = lastAmbienceMuted.indexOf(node.label) !== -1;
+        node.gain.gain.setTargetAtTime(shouldMute ? 0 : node.volume, t, 0.6);
       });
     }
 
