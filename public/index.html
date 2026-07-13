@@ -633,7 +633,7 @@
       gains.texture = audioCtx.createGain();
       gains.mood = audioCtx.createGain();
       gains.whisper = audioCtx.createGain();
-      gains.ambience.gain.value = 0.22;
+      gains.ambience.gain.value = 0.42;
       gains.texture.gain.value = 0.3;
       gains.mood.gain.value = 0.32;
       gains.whisper.gain.value = 0.9;
@@ -858,7 +858,7 @@
       muted = !muted;
       var t = audioCtx.currentTime;
       ['ambience','whisper','texture'].forEach(function(k){
-        var def = k === 'whisper' ? 0.9 : (k === 'texture' ? 0.3 : 0.22);
+        var def = k === 'whisper' ? 0.9 : (k === 'texture' ? 0.3 : 0.42);
         gains[k].gain.setTargetAtTime(muted ? 0 : def, t, 0.05);
       });
       gains.mood.gain.setTargetAtTime(muted ? 0 : 0.32, t, 0.05);
