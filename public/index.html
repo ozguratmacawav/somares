@@ -605,8 +605,6 @@
   var Engine = (function(){
     var audioCtx = null;
     var gains = {};
-    var whisperPool = [];
-    var whisperTimer = null;
     var muted = false;
     var bufferCache = {};      // url -> decoded AudioBuffer, for instant re-use
     var moodBuffers = {};      // moodKey -> AudioBuffer (all preloaded)
@@ -692,14 +690,6 @@
       return src;
     }
 
-    function scheduleWhispers(){
-      if (!whisperPool.length) return;
-      var buf = whisperPool[Math.floor(Math.random() * whisperPool.length)];
-      playOneShot(buf, gains.whisper);
-      var nextIn = 18000 + Math.random() * 22000; // 18–40s between whispers
-      whisperTimer = setTimeout(scheduleWhispers, nextIn);
-    }
-
     // Crossfades from whatever mood is currently playing to a new one.
     function setMood(moodKey){
       if (moodKey === currentMoodKey || !moodBuffers[moodKey]) return;
@@ -725,10 +715,9 @@
       }
     }
 
-    // The auto-blending room-sound layer: picks a random texture clip, fades
-    // it in, holds it, fades it out, waits, repeats — not too often, not too
-    // rare. A conductor's "texture" trigger jumps to a specific clip the same
-    // way, then auto-scheduling resumes afterward.
+    // Room-sound texture layer: entirely conductor-triggered — nothing here
+    // plays on its own. A "texture" trigger fades a clip in, holds it, then
+    // fades it back out; the client never picks or schedules one by itself.
     function fadeOutTexture(){
       if (!textureCurrent) return;
       var t = audioCtx.currentTime;
@@ -756,42 +745,22 @@
       textureCurrent = { source: src, gain: g };
 
       if (textureTimer) clearTimeout(textureTimer);
-      textureTimer = setTimeout(function(){
-        fadeOutTexture();
-        var gap = 10000 + Math.random() * 15000; // 10–25s of quiet between textures
-        textureTimer = setTimeout(scheduleTexture, gap);
-      }, holdMs);
-    }
-
-    function scheduleTexture(){
-      if (!texturePool.length) return;
-      var item = texturePool[Math.floor(Math.random() * texturePool.length)];
-      var hold = 15000 + Math.random() * 20000; // 15–35s per texture
-      playTexture(item, hold);
+      textureTimer = setTimeout(function(){ fadeOutTexture(); }, holdMs);
     }
 
     function triggerTexture(url){
       var item = texturePool.find(function(x){ return x.url === url; });
       if (!item) return;
       if (textureTimer) clearTimeout(textureTimer);
-      playTexture(item, 20000); // manual pick holds ~20s, then auto resumes
+      playTexture(item, 20000); // holds ~20s, then fades out and stays silent until triggered again
     }
 
-    // If an operator changes this participant's role mid-session, fetch that
-    // role's whisper pool and swap it in — otherwise they'd keep hearing
-    // (and triggering) their old role's whispers indefinitely.
+    // Whispers are always delivered as a specific URL on a specific trigger
+    // (targeted by role or by this exact participant) — there's no pool to
+    // reload, so an operator's role change just needs to update what this
+    // client matches against on its next poll.
     function switchRole(newRole){
-      var oldRole = role;
       role = newRole;
-      fetch('/api/audio-manifest?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(newRole))
-        .then(function(r){ return r.json(); })
-        .then(function(manifest){
-          return Promise.all(manifest.whispers.map(loadBuffer));
-        })
-        .then(function(buffers){
-          whisperPool = buffers;
-        })
-        .catch(function(){ role = oldRole; });
     }
 
     function pollVenueState(){
@@ -842,8 +811,10 @@
         jobs.push(loadBuffer(manifest.moods[key]).then(function(b){ moodBuffers[key] = b; }));
       });
 
+      // Preloaded into bufferCache so a triggered whisper plays with zero
+      // latency later — no pool needed since each trigger names its own URL.
       manifest.whispers.forEach(function(url){
-        jobs.push(loadBuffer(url).then(function(b){ whisperPool.push(b); }));
+        jobs.push(loadBuffer(url));
       });
 
       texturePool = manifest.textures || [];
@@ -888,17 +859,14 @@
       });
     }
 
+    // Only the ambience bed (Dem/Low Hum) starts on its own. Mood, sting,
+    // texture and whisper are all conductor-triggered from here on — the
+    // client never picks or schedules any of them by itself.
     function beginPlayback(){
       if (started) return;
       started = true;
 
       startAmbience();
-
-      var startMood = moodBuffers.calm ? 'calm' : Object.keys(moodBuffers)[0];
-      if (startMood) setMood(startMood);
-
-      whisperTimer = setTimeout(scheduleWhispers, 6000 + Math.random() * 6000);
-      textureTimer = setTimeout(scheduleTexture, 4000 + Math.random() * 6000);
 
       if (onBegin) onBegin();
     }

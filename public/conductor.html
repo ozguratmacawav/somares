@@ -1025,10 +1025,21 @@
     return assets.filter(function(a){ return a.layer === 'whisper' && a.role === 'score'; });
   }
 
+  // Explicit overrides for cue phrases whose uploaded file has extra words
+  // in the middle (e.g. the real recording says "...out OF THE SCORE,
+  // note..."), so the substring match below can't find them on its own.
+  var WHISPER_OVERRIDES = {
+    'step out — note what your body remembers': 'Step Out Of The Score Note What Your Body Remembers.mp3'
+  };
+
   function findWhisperAsset(phrase){
     if (!phrase) return null;
-    var norm = normalizePhrase(phrase);
     var pool = scoreWhispers();
+    if (WHISPER_OVERRIDES[phrase]){
+      var override = pool.find(function(w){ return w.label === WHISPER_OVERRIDES[phrase]; });
+      if (override) return override;
+    }
+    var norm = normalizePhrase(phrase);
     var exact = pool.find(function(w){ return normalizePhrase(w.label.replace(/\.mp3$/i, '')) === norm; });
     if (exact) return exact;
     return pool.find(function(w){ return normalizePhrase(w.label).indexOf(norm) !== -1; }) || null;
@@ -1422,7 +1433,7 @@
     renderWhisperTriggers();
     renderLibrary();
     refreshVenueState();
-    setFocus(null);
+    setSelection([]);
     editingRole = null;
     refreshPresence();
     if (presenceTimer) clearInterval(presenceTimer);
