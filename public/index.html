@@ -406,7 +406,7 @@
 
   <div class="player" id="playerBox">
     <div class="pulse"></div>
-    <p class="listening">Listening…</p>
+    <p class="listening" id="listeningText">Waiting to begin…</p>
     <button class="mute" id="muteBtn" aria-label="Mute">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 9v6h4l5 4V5L8 9H4z"/>
@@ -595,7 +595,13 @@
   requestAnimationFrame(loop);
 
   /* ---------- Audio engine ---------- */
-  // Three layers, mixed live in the browser — no server-side audio streaming needed.
+  // Layers, mixed live in the browser — no server-side audio streaming needed.
+  // ambience = constant per-venue bed(s) (own per-track volume, never stops).
+  // texture  = machine/hiss/army-type room-sound clips that fade in and out
+  //            on their own, blending into the ambience (auto, or manually
+  //            overridden by the conductor via a "texture" channel trigger).
+  // mood     = one persistent swappable emotional/phase state, crossfaded.
+  // whisper  = one-shot instructions, role-scheduled or conductor-triggered.
   var Engine = (function(){
     var audioCtx = null;
     var gains = {};
@@ -606,23 +612,33 @@
     var moodBuffers = {};      // moodKey -> AudioBuffer (all preloaded)
     var moodNode = null;       // { source, gain } for the currently playing mood
     var currentMoodKey = null;
+    var texturePool = [];      // [{ url, label, volume }]
+    var textureCurrent = null; // { source, gain } for the currently playing texture
+    var textureTimer = null;
     var venue = null, role = null, participantCode = null;
+    var ambienceTracks = [];
     var lastTriggerId = 0;
     var pollTimer = null;
+    var started = false;       // true once the conductor's synchronized start fired
+    var onBegin = null;        // UI callback once playback actually starts
 
     // Must be called synchronously inside a real user-gesture handler (the
-    // "Begin" tap) — mobile browsers refuse to start audio otherwise.
+    // "Begin" tap) — mobile browsers refuse to start audio otherwise. Only
+    // opens the audio graph; nothing plays until begin() is called.
     function unlock(){
       if (audioCtx) return;
       var Ctx = window.AudioContext || window.webkitAudioContext;
       audioCtx = new Ctx();
       gains.ambience = audioCtx.createGain();
+      gains.texture = audioCtx.createGain();
       gains.mood = audioCtx.createGain();
       gains.whisper = audioCtx.createGain();
       gains.ambience.gain.value = 0.22;
+      gains.texture.gain.value = 0.3;
       gains.mood.gain.value = 0.32;
       gains.whisper.gain.value = 0.9;
       gains.ambience.connect(audioCtx.destination);
+      gains.texture.connect(audioCtx.destination);
       gains.mood.connect(audioCtx.destination);
       gains.whisper.connect(audioCtx.destination);
       // iOS/Safari sometimes create the context suspended even on a tap.
@@ -637,11 +653,17 @@
         .then(function(buf){ bufferCache[url] = buf; return buf; });
     }
 
-    function playLoop(buffer, gainNode){
+    function playLoop(buffer, gainNode, volume){
+      var g = gainNode;
+      if (volume != null && volume !== 1){
+        g = audioCtx.createGain();
+        g.gain.value = volume;
+        g.connect(gainNode);
+      }
       var src = audioCtx.createBufferSource();
       src.buffer = buffer;
       src.loop = true;
-      src.connect(gainNode);
+      src.connect(g);
       src.start();
       return src;
     }
@@ -687,6 +709,58 @@
       }
     }
 
+    // The auto-blending room-sound layer: picks a random texture clip, fades
+    // it in, holds it, fades it out, waits, repeats — not too often, not too
+    // rare. A conductor's "texture" trigger jumps to a specific clip the same
+    // way, then auto-scheduling resumes afterward.
+    function fadeOutTexture(){
+      if (!textureCurrent) return;
+      var t = audioCtx.currentTime;
+      var node = textureCurrent;
+      node.gain.gain.cancelScheduledValues(t);
+      node.gain.gain.setValueAtTime(node.gain.gain.value, t);
+      node.gain.gain.linearRampToValueAtTime(0, t + 2.5);
+      node.source.stop(t + 2.6);
+      textureCurrent = null;
+    }
+
+    function playTexture(item, holdMs){
+      if (!bufferCache[item.url]) return;
+      fadeOutTexture();
+      var t = audioCtx.currentTime;
+      var g = audioCtx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(item.volume != null ? item.volume : 1, t + 2.5);
+      g.connect(gains.texture);
+      var src = audioCtx.createBufferSource();
+      src.buffer = bufferCache[item.url];
+      src.loop = true;
+      src.connect(g);
+      src.start();
+      textureCurrent = { source: src, gain: g };
+
+      if (textureTimer) clearTimeout(textureTimer);
+      textureTimer = setTimeout(function(){
+        fadeOutTexture();
+        var gap = 10000 + Math.random() * 15000; // 10–25s of quiet between textures
+        textureTimer = setTimeout(scheduleTexture, gap);
+      }, holdMs);
+    }
+
+    function scheduleTexture(){
+      if (!texturePool.length) return;
+      var item = texturePool[Math.floor(Math.random() * texturePool.length)];
+      var hold = 15000 + Math.random() * 20000; // 15–35s per texture
+      playTexture(item, hold);
+    }
+
+    function triggerTexture(url){
+      var item = texturePool.find(function(x){ return x.url === url; });
+      if (!item) return;
+      if (textureTimer) clearTimeout(textureTimer);
+      playTexture(item, 20000); // manual pick holds ~20s, then auto resumes
+    }
+
     // If an operator changes this participant's role mid-session, fetch that
     // role's whisper pool and swap it in — otherwise they'd keep hearing
     // (and triggering) their old role's whispers indefinitely.
@@ -711,17 +785,28 @@
       fetch(url)
         .then(function(r){ return r.json(); })
         .then(function(data){
+          if (!started){
+            if (data.startedAt) beginPlayback();
+            return;
+          }
           if (data.mood) setMood(data.mood);
           if (data.role && data.role !== role) switchRole(data.role);
           (data.triggers || []).forEach(function(trig){
             lastTriggerId = Math.max(lastTriggerId, trig.id);
-            loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });
+            if (trig.channel === 'texture'){
+              loadBuffer(trig.url).then(function(){ triggerTexture(trig.url); });
+            } else {
+              loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });
+            }
           });
         })
         .catch(function(){});
     }
 
-    function start(manifest, venueKey, roleKey, participantCodeVal){
+    // Loads every buffer and starts polling, but plays nothing yet — the
+    // participant sits in a silent "waiting" state until the conductor's
+    // synchronized start signal arrives, so everyone begins together.
+    function prepare(manifest, venueKey, roleKey, participantCodeVal){
       unlock();
       venue = venueKey;
       role = roleKey;
@@ -729,7 +814,10 @@
       lastTriggerId = manifest.sinceId || 0;
       var jobs = [];
 
-      manifest.ambiences.forEach(function(url){ jobs.push(loadBuffer(url).then(function(b){ playLoop(b, gains.ambience); })); });
+      ambienceTracks = manifest.ambiences || [];
+      ambienceTracks.forEach(function(track){
+        jobs.push(loadBuffer(track.url).then(function(b){ track._buf = b; }));
+      });
 
       Object.keys(manifest.moods).forEach(function(key){
         jobs.push(loadBuffer(manifest.moods[key]).then(function(b){ moodBuffers[key] = b; }));
@@ -739,26 +827,50 @@
         jobs.push(loadBuffer(url).then(function(b){ whisperPool.push(b); }));
       });
 
+      texturePool = manifest.textures || [];
+      texturePool.forEach(function(item){ jobs.push(loadBuffer(item.url)); });
+
       return Promise.all(jobs).then(function(){
-        var startMood = manifest.moods.calm ? 'calm' : Object.keys(manifest.moods)[0];
-        if (startMood) setMood(startMood);
-        // First whisper arrives a little sooner so the layer reads as alive early on.
-        whisperTimer = setTimeout(scheduleWhispers, 6000 + Math.random() * 6000);
         pollTimer = setInterval(pollVenueState, 4000);
+        pollVenueState(); // check immediately in case the score already started
       });
+    }
+
+    function beginPlayback(){
+      if (started) return;
+      started = true;
+
+      // Ambience: every track loops forever, each at its own relative volume.
+      ambienceTracks.forEach(function(track){
+        if (track._buf) playLoop(track._buf, gains.ambience, track.volume);
+      });
+
+      var startMood = moodBuffers.calm ? 'calm' : Object.keys(moodBuffers)[0];
+      if (startMood) setMood(startMood);
+
+      whisperTimer = setTimeout(scheduleWhispers, 6000 + Math.random() * 6000);
+      textureTimer = setTimeout(scheduleTexture, 4000 + Math.random() * 6000);
+
+      if (onBegin) onBegin();
     }
 
     function toggleMute(){
       muted = !muted;
       var t = audioCtx.currentTime;
-      ['ambience','whisper'].forEach(function(k){
-        gains[k].gain.setTargetAtTime(muted ? 0 : (k === 'whisper' ? 0.9 : 0.22), t, 0.05);
+      ['ambience','whisper','texture'].forEach(function(k){
+        var def = k === 'whisper' ? 0.9 : (k === 'texture' ? 0.3 : 0.22);
+        gains[k].gain.setTargetAtTime(muted ? 0 : def, t, 0.05);
       });
       gains.mood.gain.setTargetAtTime(muted ? 0 : 0.32, t, 0.05);
       return muted;
     }
 
-    return { unlock: unlock, start: start, toggleMute: toggleMute };
+    return {
+      unlock: unlock,
+      prepare: prepare,
+      toggleMute: toggleMute,
+      onBegin: function(fn){ onBegin = fn; }
+    };
   })();
 
   /* ---------- Registration form ---------- */
@@ -768,6 +880,9 @@
   var playerBox = document.getElementById('playerBox');
   var muteBtn = document.getElementById('muteBtn');
   var pidValue = document.getElementById('pidValue');
+  var listeningText = document.getElementById('listeningText');
+
+  Engine.onBegin(function(){ listeningText.textContent = 'Listening…'; });
 
   form.addEventListener('submit', function(e){
     e.preventDefault();
@@ -824,7 +939,7 @@
         showPlayer();
         return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
           .then(function(r){ return r.json(); })
-          .then(function(manifest){ return Engine.start(manifest, data.venue, data.role, data.participantCode); });
+          .then(function(manifest){ return Engine.prepare(manifest, data.venue, data.role, data.participantCode); });
       })
       .catch(function(){ showError(); });
   });

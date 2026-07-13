@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { layer, role, venue, moodKey, label, dataBase64 } = req.body || {};
+  const { layer, role, venue, moodKey, label, dataBase64, volume, category } = req.body || {};
 
   if (!layer || !KNOWN_LAYERS.has(layer) || !label || !dataBase64) {
     res.status(400).json({ error: 'layer, label and dataBase64 are required' });
@@ -60,7 +60,9 @@ module.exports = async (req, res) => {
 
     const id = await insertAudioAsset({
       layer, role: role || null, venue: venue || null, moodKey: moodKey || null,
-      label, url: blob.url
+      label, url: blob.url,
+      volume: volume != null && volume !== '' ? Number(volume) : 1.0,
+      category: layer === 'mood' && category === 'texture' ? 'texture' : 'state'
     });
 
     res.status(200).json({ id, url: blob.url });

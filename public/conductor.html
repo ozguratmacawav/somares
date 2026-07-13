@@ -298,6 +298,11 @@
     </div>
 
     <div class="panel">
+      <h2>Trigger a Texture <span class="scopeNote">— room-sound bed, auto-plays on its own; this jumps it to one clip for ~20s</span></h2>
+      <div class="stingRow" id="textureRow"></div>
+    </div>
+
+    <div class="panel">
       <h2>Trigger a Whisper</h2>
       <div id="whisperGroups"></div>
     </div>
@@ -357,6 +362,11 @@
         <datalist id="roleSuggestions"></datalist>
         <select id="uploadVenue" style="display:none;"></select>
         <input type="text" id="uploadMoodKey" placeholder="mood key (e.g. tense)" style="display:none;">
+        <select id="uploadCategory" style="display:none;">
+          <option value="state">State (swappable mood)</option>
+          <option value="texture">Texture (auto-blend room sound)</option>
+        </select>
+        <input type="number" id="uploadVolume" placeholder="volume (1 = full)" min="0" max="1" step="0.1" style="display:none; width:120px;">
         <input type="file" id="uploadFile" accept="audio/*">
         <button id="uploadBtn">Upload</button>
       </div>
@@ -386,6 +396,7 @@
   var moodRow = document.getElementById('moodRow');
   var moodScopeNote = document.getElementById('moodScopeNote');
   var stingRow = document.getElementById('stingRow');
+  var textureRow = document.getElementById('textureRow');
   var whisperGroups = document.getElementById('whisperGroups');
   var onlineChips = document.getElementById('onlineChips');
   var regList = document.getElementById('regList');
@@ -394,6 +405,8 @@
   var uploadRole = document.getElementById('uploadRole');
   var uploadVenue = document.getElementById('uploadVenue');
   var uploadMoodKey = document.getElementById('uploadMoodKey');
+  var uploadCategory = document.getElementById('uploadCategory');
+  var uploadVolume = document.getElementById('uploadVolume');
   var uploadFile = document.getElementById('uploadFile');
   var uploadBtn = document.getElementById('uploadBtn');
   var uploadMsg = document.getElementById('uploadMsg');
@@ -430,6 +443,8 @@
     uploadRole.style.display = layer === 'whisper' ? '' : 'none';
     uploadVenue.style.display = layer === 'ambience' ? '' : 'none';
     uploadMoodKey.style.display = layer === 'mood' ? '' : 'none';
+    uploadCategory.style.display = layer === 'mood' ? '' : 'none';
+    uploadVolume.style.display = (layer === 'mood' || layer === 'ambience') ? '' : 'none';
   }
   uploadLayer.addEventListener('change', updateUploadFields);
   updateUploadFields();
@@ -623,6 +638,35 @@
       btn.addEventListener('click', function(){ sendTrigger(null, m.url, 'sting "' + m.mood_key + '"'); });
       stingRow.appendChild(btn);
     });
+  }
+
+  /* ---------- Texture (auto-blend room-sound layer, manual override) ---------- */
+  function renderTextures(){
+    var textures = assets.filter(function(a){ return a.layer === 'mood' && a.category === 'texture'; });
+    textureRow.innerHTML = '';
+    if (!textures.length){
+      textureRow.innerHTML = '<span class="chipNote">No texture clips uploaded yet — mark a Mood upload as "Texture".</span>';
+      return;
+    }
+    textures.forEach(function(t){
+      var btn = document.createElement('button');
+      btn.className = 'stingBtn';
+      btn.textContent = t.mood_key;
+      btn.addEventListener('click', function(){ sendTexture(t.url, t.mood_key); });
+      textureRow.appendChild(btn);
+    });
+  }
+
+  function sendTexture(assetUrl, label){
+    var body = { venue: venueSelect.value, assetUrl: assetUrl, channel: 'texture' };
+    if (focused) body.targetParticipantCode = focused.code;
+    api('/api/admin/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(){
+      showToast('Texture: ' + label + (focused ? ' → ' + focused.name : ' (everyone)'));
+    }).catch(function(){ showToast('Failed to send texture'); });
   }
 
   /* ---------- Whisper ---------- */
@@ -853,11 +897,24 @@
     return pool.find(function(w){ return normalizePhrase(w.label).indexOf(norm) !== -1; }) || null;
   }
 
+  // Explicit overrides for phase-sound labels whose obvious file doesn't
+  // share wording with the cue sheet's phrase (picked after listening to
+  // what was actually uploaded for Pilot Score 01).
+  var MOOD_OVERRIDES = {
+    'water steam': 'stream',
+    'shared tone': 'calm'
+  };
+
   function findMoodAsset(phrase){
     if (!phrase) return null;
-    var norm = normalizePhrase(phrase).replace(/\s/g, '-');
+    var norm = normalizePhrase(phrase);
     var pool = assets.filter(function(a){ return a.layer === 'mood'; });
-    return pool.find(function(m){ return m.mood_key === norm || m.mood_key.indexOf(norm) !== -1; }) || null;
+    if (MOOD_OVERRIDES[norm]){
+      var override = pool.find(function(m){ return m.mood_key === MOOD_OVERRIDES[norm]; });
+      if (override) return override;
+    }
+    var slug = norm.replace(/\s/g, '-');
+    return pool.find(function(m){ return m.mood_key === slug || m.mood_key.indexOf(slug) !== -1; }) || null;
   }
 
   function renderScoreSetup(){
@@ -1025,12 +1082,26 @@
   }
 
   scoreStartBtn.addEventListener('click', function(){
-    scoreStartedAt = Date.now();
-    if (scoreClockTimer) clearInterval(scoreClockTimer);
-    scoreClockTimer = setInterval(tickScoreClock, 500);
-    showToast('Score started — clock running');
+    // This is the synchronized start: every registered phone at this venue
+    // is silently polling for it and begins playback the moment it appears —
+    // so all 5 positions start together instead of whenever each tapped Begin.
+    api('/api/admin/start-experience', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: venueSelect.value })
+    }).then(function(){
+      scoreStartedAt = Date.now();
+      if (scoreClockTimer) clearInterval(scoreClockTimer);
+      scoreClockTimer = setInterval(tickScoreClock, 500);
+      showToast('Experience started for everyone — clock running');
+    }).catch(function(){ showToast('Failed to start'); });
   });
   scoreResetBtn.addEventListener('click', function(){
+    api('/api/admin/reset-experience', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: venueSelect.value })
+    }).catch(function(){});
     scoreStartedAt = null;
     if (scoreClockTimer) clearInterval(scoreClockTimer);
     scoreClockEl.textContent = '0:00';
@@ -1105,7 +1176,7 @@
       showToast('Deleted');
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderWhisperTriggers(); renderLibrary();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary();
     }).catch(function(){ showToast('Failed to delete'); });
   }
 
@@ -1130,7 +1201,8 @@
       var body = { layer: layer, label: file.name, dataBase64: b64 };
       if (layer === 'whisper') body.role = uploadRole.value;
       if (layer === 'ambience') body.venue = uploadVenue.value;
-      if (layer === 'mood') body.moodKey = uploadMoodKey.value.trim();
+      if (layer === 'mood') { body.moodKey = uploadMoodKey.value.trim(); body.category = uploadCategory.value; }
+      if (uploadVolume.value !== '') body.volume = uploadVolume.value;
 
       return api('/api/admin/upload-asset', {
         method: 'POST',
@@ -1143,7 +1215,7 @@
       uploadMoodKey.value = '';
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderWhisperTriggers(); renderLibrary();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary();
     }).catch(function(err){
       uploadMsg.textContent = (err && err.message) || 'Upload failed.';
     }).finally(function(){
@@ -1162,6 +1234,7 @@
   function renderAll(){
     renderMoods();
     renderStings();
+    renderTextures();
     renderWhisperTriggers();
     renderLibrary();
     refreshVenueState();
