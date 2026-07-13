@@ -333,11 +333,12 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': sessionStorage.getItem('somares_admin_key') },
         body: JSON.stringify({ action: 'updateRole', participantCode: code, role: newRole })
-      }).then(function(r){
-        roleMsg.textContent = r.ok ? 'Saved.' : 'Failed to save.';
-        assetsByRole = {};
-        return load(sessionStorage.getItem('somares_admin_key'));
-      }).then(function(data){ lastData = data; }).catch(function(){ roleMsg.textContent = 'Failed to save.'; });
+      }).then(function(r){ return r.json().catch(function(){ return {}; }); })
+        .then(function(data){
+          roleMsg.textContent = data.bumped ? (data.bumped.first_name + ' was unassigned from ' + newRole + '.') : 'Saved.';
+          assetsByRole = {};
+          return load(sessionStorage.getItem('somares_admin_key'));
+        }).then(function(data){ lastData = data; }).catch(function(){ roleMsg.textContent = 'Failed to save.'; });
     });
     editor.appendChild(sel);
     editor.appendChild(customInput);

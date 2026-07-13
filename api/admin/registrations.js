@@ -48,8 +48,8 @@ module.exports = async (req, res) => {
           res.status(400).json({ error: 'participantCode and role are required' });
           return;
         }
-        await updateRegistrationRole(participantCode, String(role).trim());
-        res.status(200).json({ ok: true });
+        const bumped = await updateRegistrationRole(participantCode, String(role).trim());
+        res.status(200).json({ ok: true, bumped });
         return;
       }
 

@@ -85,6 +85,8 @@
   .chip.selected .chipDot{ background:#1a1006; box-shadow:none; }
   .chipRole{ opacity:0.7; font-size:11px; }
   .chipNote{ font-size:12px; color:var(--text-dim); }
+  .bgTrackRow{ font-size:13px; color:var(--text); padding:6px 0; border-bottom:1px solid var(--border); }
+  .bgTrackRow:last-child{ border-bottom:none; }
 
   .moodRow{ display:flex; flex-wrap:wrap; gap:8px; }
   .moodBtn{
@@ -202,7 +204,16 @@
   }
   .scoreClock{ font-size:34px; font-weight:200; letter-spacing:0.02em; font-variant-numeric:tabular-nums; }
   .scorePhase{ font-size:13px; color:var(--amber-light); font-weight:600; margin-top:2px; }
-  .scoreControls{ display:flex; gap:8px; }
+  .scoreNextLine{ font-size:12px; color:var(--text-dim); margin-top:4px; }
+  .scoreNextLine .dueNow{ color:#e0a76b; font-weight:700; }
+  .scoreControls{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .autoFireToggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); cursor:pointer; user-select:none; }
+  .autoFireToggle input{ accent-color:var(--amber); }
+  .timelineRow.fired{ opacity:0.55; }
+  .timelineRow.pulse{ animation:scorePulse 1.2s ease-out 2; }
+  @keyframes scorePulse{
+    0%{ background:rgba(224,167,107,0.35); } 100%{ background:transparent; }
+  }
   .scoreBtn{
     padding:9px 16px; font-size:13px; font-weight:600; color:var(--text); background:rgba(255,255,255,0.06);
     border:1px solid var(--border); border-radius:8px; cursor:pointer; font-family:inherit;
@@ -288,6 +299,12 @@
     </div>
 
     <div class="panel">
+      <h2>Background <span class="scopeNote">— always on for everyone, not something you trigger</span></h2>
+      <div id="backgroundList"></div>
+      <button class="scoreBtn" id="backgroundRestartBtn" style="margin-top:10px;">Restart background for everyone</button>
+    </div>
+
+    <div class="panel">
       <h2>Trigger a Mood <span class="scopeNote" id="moodScopeNote">— everyone at this venue</span></h2>
       <div class="moodRow" id="moodRow"></div>
     </div>
@@ -319,8 +336,10 @@
         <div>
           <div class="scoreClock" id="scoreClock">0:00</div>
           <div class="scorePhase" id="scorePhase">Not started</div>
+          <div class="scoreNextLine" id="scoreNextLine"></div>
         </div>
         <div class="scoreControls">
+          <label class="autoFireToggle"><input type="checkbox" id="scoreAutoFireToggle" checked> Auto-fire cues on time</label>
           <button class="scoreBtn primary" id="scoreStartBtn">Start Score</button>
           <button class="scoreBtn" id="scoreResetBtn">Reset</button>
         </div>
@@ -331,7 +350,7 @@
 
       <div class="scoreNav">
         <button class="scoreBtn" id="scorePrevBtn">&larr; Prev</button>
-        <button class="scoreBtn primary" id="scoreSendBtn">Send This Step</button>
+        <button class="scoreBtn primary" id="scoreSendBtn">Send This Step Now</button>
         <button class="scoreBtn" id="scoreNextBtn">Next &rarr;</button>
       </div>
     </div>
@@ -393,6 +412,8 @@
   var unlockBtn = document.getElementById('unlockBtn');
   var gateErr = document.getElementById('gateErr');
   var venueSelect = document.getElementById('venueSelect');
+  var backgroundListEl = document.getElementById('backgroundList');
+  var backgroundRestartBtn = document.getElementById('backgroundRestartBtn');
   var moodRow = document.getElementById('moodRow');
   var moodScopeNote = document.getElementById('moodScopeNote');
   var stingRow = document.getElementById('stingRow');
@@ -581,6 +602,32 @@
       if (tabPanels.score.style.display !== 'none'){ renderScoreSetup(); renderScoreStep(); }
     }).catch(function(){});
   }
+
+  /* ---------- Background (ambience layer — automatic, not a trigger) ---------- */
+  function renderBackground(){
+    var tracks = assets.filter(function(a){ return a.layer === 'ambience' && a.venue === venueSelect.value; });
+    backgroundListEl.innerHTML = '';
+    if (!tracks.length){
+      backgroundListEl.innerHTML = '<span class="chipNote">No background tracks uploaded for this venue yet.</span>';
+      return;
+    }
+    tracks.forEach(function(t){
+      var row = document.createElement('div');
+      row.className = 'bgTrackRow';
+      row.textContent = t.label + '  ·  relative volume ' + t.volume;
+      backgroundListEl.appendChild(row);
+    });
+  }
+
+  backgroundRestartBtn.addEventListener('click', function(){
+    api('/api/admin/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: venueSelect.value, assetUrl: 'restart', channel: 'ambience-restart' })
+    }).then(function(){
+      showToast('Background restarted for everyone at this venue');
+    }).catch(function(){ showToast('Failed to restart background'); });
+  });
 
   /* ---------- Mood ---------- */
   function renderMoods(){
@@ -806,8 +853,8 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: 'updateRole', participantCode: p.participantCode, role: newRole })
-            }).then(function(){
-              showToast('Role updated');
+            }).then(function(data){
+              showToast(data.bumped ? (data.bumped.first_name + ' was unassigned from ' + newRole) : 'Role updated');
               editingRole = null;
               renderRegistrations();
             }).catch(function(){ showToast('Failed to update role'); });
@@ -867,10 +914,14 @@
   var scoreStepIndex = 0;
   var scoreStartedAt = null;
   var scoreClockTimer = null;
+  var scoreFired = {}; // step index -> true once auto/manually sent, so auto-fire never repeats it
+  var scoreAutoFire = true;
 
   var scoreSetupEl = document.getElementById('scoreSetup');
   var scoreClockEl = document.getElementById('scoreClock');
   var scorePhaseEl = document.getElementById('scorePhase');
+  var scoreNextLineEl = document.getElementById('scoreNextLine');
+  var scoreAutoFireToggle = document.getElementById('scoreAutoFireToggle');
   var scoreStartBtn = document.getElementById('scoreStartBtn');
   var scoreResetBtn = document.getElementById('scoreResetBtn');
   var scoreSoundRowEl = document.getElementById('scoreSoundRow');
@@ -879,6 +930,16 @@
   var scoreSendBtn = document.getElementById('scoreSendBtn');
   var scoreNextBtn = document.getElementById('scoreNextBtn');
   var scoreTimelineEl = document.getElementById('scoreTimeline');
+
+  scoreAutoFireToggle.addEventListener('change', function(){
+    scoreAutoFire = scoreAutoFireToggle.checked;
+    showToast(scoreAutoFire ? 'Auto-fire on — cues send themselves on time' : 'Auto-fire off — use "Send This Step Now" yourself');
+  });
+
+  function parseClock(str){
+    var parts = String(str).split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
 
   function normalizePhrase(s){
     return String(s).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -951,7 +1012,10 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'updateRole', participantCode: code, role: pos })
-          }).then(function(){ showToast(pos.toUpperCase() + ' assigned'); }).catch(function(){});
+          }).then(function(data){
+            showToast(pos.toUpperCase() + ' assigned' + (data.bumped ? ' (' + data.bumped.first_name + ' unassigned)' : ''));
+            refreshPresence();
+          }).catch(function(){});
         }
       });
       row.appendChild(label);
@@ -970,6 +1034,30 @@
     if (!scoreStartedAt) return;
     var elapsed = (Date.now() - scoreStartedAt) / 1000;
     scoreClockEl.textContent = formatClock(elapsed);
+
+    var advanced = false;
+    if (scoreAutoFire){
+      while (scoreStepIndex < SCORE_STEPS.length && !scoreFired[scoreStepIndex] && elapsed >= parseClock(SCORE_STEPS[scoreStepIndex].time)){
+        fireStep(scoreStepIndex, true);
+        advanced = true;
+        if (scoreStepIndex < SCORE_STEPS.length - 1) scoreStepIndex++; else break;
+      }
+    }
+    if (advanced) renderScoreStep(); else renderScoreNextLine(elapsed);
+  }
+
+  function renderScoreNextLine(elapsed){
+    var step = SCORE_STEPS[scoreStepIndex];
+    if (!step){ scoreNextLineEl.textContent = ''; return; }
+    var due = scoreStartedAt && elapsed != null && elapsed >= parseClock(step.time);
+    if (!scoreStartedAt){
+      scoreNextLineEl.textContent = 'Next → [' + step.time + '] ' + step.phase;
+    } else if (due){
+      scoreNextLineEl.innerHTML = '<span class="dueNow">Now: [' + step.time + '] ' + escapeHtml(step.phase) + '</span>';
+    } else {
+      var remain = Math.max(0, parseClock(step.time) - elapsed);
+      scoreNextLineEl.textContent = 'Next → [' + step.time + '] ' + step.phase + (scoreAutoFire ? ' — auto in ' + formatClock(remain) : '');
+    }
   }
 
   function renderScoreStep(){
@@ -1036,15 +1124,19 @@
     scoreCuesEl.appendChild(grid);
 
     renderScoreTimeline();
+    renderScoreNextLine(scoreStartedAt ? (Date.now() - scoreStartedAt) / 1000 : null);
     scorePrevBtn.disabled = scoreStepIndex === 0;
     scoreNextBtn.disabled = scoreStepIndex === SCORE_STEPS.length - 1;
   }
+
+  var lastFiredIndex = null;
 
   function renderScoreTimeline(){
     scoreTimelineEl.innerHTML = '';
     SCORE_STEPS.forEach(function(step, i){
       var row = document.createElement('div');
-      row.className = 'timelineRow' + (i === scoreStepIndex ? ' current' : '') + (i < scoreStepIndex ? ' done' : '');
+      row.className = 'timelineRow' + (i === scoreStepIndex ? ' current' : '') + (i < scoreStepIndex ? ' done' : '')
+        + (scoreFired[i] ? ' fired' : '') + (i === lastFiredIndex ? ' pulse' : '');
       var t = document.createElement('div');
       t.className = 'timelineTime';
       t.textContent = step.time;
@@ -1058,8 +1150,13 @@
     });
   }
 
-  function sendScoreStep(){
-    var step = SCORE_STEPS[scoreStepIndex];
+  // Fires every position's cue for one step. Used both by the on-time
+  // auto-fire loop and by the manual "Send This Step Now" override — manual
+  // sends always go through even if the step already auto-fired, so the
+  // conductor can deliberately repeat a cue.
+  function fireStep(index, isAuto){
+    var step = SCORE_STEPS[index];
+    scoreFired[index] = true;
     var sent = 0;
     SCORE_POSITIONS.forEach(function(pos){
       var phrase = step.cues[pos];
@@ -1074,7 +1171,15 @@
       }).catch(function(){});
       sent++;
     });
-    showToast('Sent step [' + step.time + '] to ' + sent + ' position(s)');
+    showToast((isAuto ? '⏱ Auto-sent ' : 'Sent ') + 'step [' + step.time + '] to ' + sent + ' position(s)');
+    lastFiredIndex = index;
+    renderScoreTimeline();
+    setTimeout(function(){ if (lastFiredIndex === index){ lastFiredIndex = null; renderScoreTimeline(); } }, 2500);
+    return sent;
+  }
+
+  function sendScoreStep(){
+    fireStep(scoreStepIndex, false);
     if (scoreStepIndex < SCORE_STEPS.length - 1){
       scoreStepIndex++;
       renderScoreStep();
@@ -1106,6 +1211,8 @@
     if (scoreClockTimer) clearInterval(scoreClockTimer);
     scoreClockEl.textContent = '0:00';
     scoreStepIndex = 0;
+    scoreFired = {};
+    lastFiredIndex = null;
     renderScoreStep();
   });
   scorePrevBtn.addEventListener('click', function(){ if (scoreStepIndex > 0){ scoreStepIndex--; renderScoreStep(); } });
@@ -1176,7 +1283,7 @@
       showToast('Deleted');
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); renderBackground();
     }).catch(function(){ showToast('Failed to delete'); });
   }
 
@@ -1215,7 +1322,7 @@
       uploadMoodKey.value = '';
       return loadAssets();
     }).then(function(){
-      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary();
+      renderMoods(); renderStings(); renderTextures(); renderWhisperTriggers(); renderLibrary(); renderBackground();
     }).catch(function(err){
       uploadMsg.textContent = (err && err.message) || 'Upload failed.';
     }).finally(function(){
@@ -1232,6 +1339,7 @@
   }
 
   function renderAll(){
+    renderBackground();
     renderMoods();
     renderStings();
     renderTextures();

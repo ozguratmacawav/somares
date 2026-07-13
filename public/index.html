@@ -617,6 +617,7 @@
     var textureTimer = null;
     var venue = null, role = null, participantCode = null;
     var ambienceTracks = [];
+    var ambienceSources = []; // currently-playing ambience source nodes, so a "restart" trigger can stop + relaunch them
     var lastTriggerId = 0;
     var pollTimer = null;
     var started = false;       // true once the conductor's synchronized start fired
@@ -793,7 +794,9 @@
           if (data.role && data.role !== role) switchRole(data.role);
           (data.triggers || []).forEach(function(trig){
             lastTriggerId = Math.max(lastTriggerId, trig.id);
-            if (trig.channel === 'texture'){
+            if (trig.channel === 'ambience-restart'){
+              startAmbience();
+            } else if (trig.channel === 'texture'){
               loadBuffer(trig.url).then(function(){ triggerTexture(trig.url); });
             } else {
               loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });
@@ -836,14 +839,22 @@
       });
     }
 
+    // Ambience: every track loops forever, each at its own relative volume.
+    // Kept separate from beginPlayback so a conductor's "restart background"
+    // trigger can relaunch it mid-session without touching mood/whisper/texture.
+    function startAmbience(){
+      ambienceSources.forEach(function(src){ try { src.stop(); } catch (e){} });
+      ambienceSources = [];
+      ambienceTracks.forEach(function(track){
+        if (track._buf) ambienceSources.push(playLoop(track._buf, gains.ambience, track.volume));
+      });
+    }
+
     function beginPlayback(){
       if (started) return;
       started = true;
 
-      // Ambience: every track loops forever, each at its own relative volume.
-      ambienceTracks.forEach(function(track){
-        if (track._buf) playLoop(track._buf, gains.ambience, track.volume);
-      });
+      startAmbience();
 
       var startMood = moodBuffers.calm ? 'calm' : Object.keys(moodBuffers)[0];
       if (startMood) setMood(startMood);
