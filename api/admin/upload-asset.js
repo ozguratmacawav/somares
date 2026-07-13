@@ -1,10 +1,6 @@
 const { put } = require('@vercel/blob');
 const { ensureSchema, insertAudioAsset } = require('../../lib/db');
 
-const KNOWN_ROLES = new Set([
-  'merchant', 'traveler', 'translator', 'innkeeper', 'guard',
-  'storyteller', 'pilgrim', 'caravan-guide', 'spice-trader', 'messenger'
-]);
 const KNOWN_VENUES = new Set([
   'yildiz-museum', 'catalhoyuk', 'ciurlionis', 'fondazione-ago'
 ]);
@@ -28,8 +24,8 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'layer, label and dataBase64 are required' });
     return;
   }
-  if (layer === 'whisper' && !KNOWN_ROLES.has(role)) {
-    res.status(400).json({ error: 'a valid role is required for whisper uploads' });
+  if (layer === 'whisper' && (!role || !String(role).trim())) {
+    res.status(400).json({ error: 'a role is required for whisper uploads' });
     return;
   }
   if (layer === 'ambience' && !KNOWN_VENUES.has(venue)) {

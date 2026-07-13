@@ -196,6 +196,53 @@
   }
   .regDelete:hover{ background:rgba(224,122,107,0.15); border-color:#e07a6b; }
 
+  /* Score Runner */
+  .scoreHeader{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:12px;
+  }
+  .scoreClock{ font-size:34px; font-weight:200; letter-spacing:0.02em; font-variant-numeric:tabular-nums; }
+  .scorePhase{ font-size:13px; color:var(--amber-light); font-weight:600; margin-top:2px; }
+  .scoreControls{ display:flex; gap:8px; }
+  .scoreBtn{
+    padding:9px 16px; font-size:13px; font-weight:600; color:var(--text); background:rgba(255,255,255,0.06);
+    border:1px solid var(--border); border-radius:8px; cursor:pointer; font-family:inherit;
+  }
+  .scoreBtn:hover{ background:rgba(255,255,255,0.1); }
+  .scoreBtn.primary{ color:#1a1006; background:linear-gradient(135deg,var(--amber-light),var(--amber)); border-color:transparent; }
+  .scoreBtn:disabled{ opacity:0.4; cursor:default; }
+
+  .scoreSoundRow{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:16px; }
+  .scoreSoundLabel{ font-size:12px; color:var(--text-dim); }
+
+  .cueGrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-bottom:16px; }
+  .cueCard{
+    padding:14px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.03);
+  }
+  .cueCard.silent{ opacity:0.4; }
+  .cueCard.missing{ border-color:#e07a6b; }
+  .cuePosition{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:6px; }
+  .cuePositionName{ font-size:12px; color:var(--amber-light); margin-left:6px; }
+  .cueText{ font-size:14px; color:var(--text); line-height:1.4; }
+  .cueMissing{ font-size:11px; color:#e07a6b; margin-top:6px; }
+
+  .scoreNav{ display:flex; gap:8px; }
+  .scoreNav .scoreBtn#scoreSendBtn{ flex:1; }
+
+  .timelineRow{
+    display:flex; align-items:center; gap:12px; padding:8px 6px; border-bottom:1px solid var(--border);
+    font-size:12px; cursor:pointer;
+  }
+  .timelineRow:last-child{ border-bottom:none; }
+  .timelineRow:hover{ background:rgba(255,255,255,0.03); }
+  .timelineRow.current{ background:rgba(212,162,86,0.12); }
+  .timelineRow.done{ opacity:0.45; }
+  .timelineTime{ color:var(--text-dim); width:44px; flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .timelinePhase{ color:var(--text); }
+
+  .setupRow{ display:flex; align-items:center; gap:10px; padding:8px 4px; }
+  .setupLabel{ width:36px; font-weight:700; color:var(--amber-light); font-size:13px; }
+  .setupRow select{ flex:1; margin-bottom:0; }
+
   .toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
     background:rgba(20,14,8,0.95); border:1px solid var(--border); color:var(--text);
@@ -229,6 +276,7 @@
 
   <div class="tabBar">
     <button class="tabBtn active" data-tab="live">Live Control</button>
+    <button class="tabBtn" data-tab="score">Score Runner</button>
     <button class="tabBtn" data-tab="registrations">Registrations</button>
     <button class="tabBtn" data-tab="library">Audio Library</button>
   </div>
@@ -255,6 +303,40 @@
     </div>
   </div>
 
+  <div class="tabPanel" id="tab-score" style="display:none;">
+    <div class="panel">
+      <h2>Setup — assign P1&ndash;P5</h2>
+      <div id="scoreSetup"></div>
+    </div>
+
+    <div class="panel">
+      <div class="scoreHeader">
+        <div>
+          <div class="scoreClock" id="scoreClock">0:00</div>
+          <div class="scorePhase" id="scorePhase">Not started</div>
+        </div>
+        <div class="scoreControls">
+          <button class="scoreBtn primary" id="scoreStartBtn">Start Score</button>
+          <button class="scoreBtn" id="scoreResetBtn">Reset</button>
+        </div>
+      </div>
+
+      <div id="scoreSoundRow"></div>
+      <div id="scoreCues"></div>
+
+      <div class="scoreNav">
+        <button class="scoreBtn" id="scorePrevBtn">&larr; Prev</button>
+        <button class="scoreBtn primary" id="scoreSendBtn">Send This Step</button>
+        <button class="scoreBtn" id="scoreNextBtn">Next &rarr;</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Full timeline</h2>
+      <div id="scoreTimeline"></div>
+    </div>
+  </div>
+
   <div class="tabPanel" id="tab-registrations" style="display:none;">
     <div class="panel">
       <h2>Registrations <span class="scopeNote">at this venue</span></h2>
@@ -271,7 +353,8 @@
           <option value="mood">Mood (shared)</option>
           <option value="ambience">Ambience (per venue)</option>
         </select>
-        <select id="uploadRole"></select>
+        <input type="text" id="uploadRole" list="roleSuggestions" placeholder="role (e.g. p1, score)">
+        <datalist id="roleSuggestions"></datalist>
         <select id="uploadVenue" style="display:none;"></select>
         <input type="text" id="uploadMoodKey" placeholder="mood key (e.g. tense)" style="display:none;">
         <input type="file" id="uploadFile" accept="audio/*">
@@ -325,9 +408,10 @@
   var expandedFolders = {};
   var editingRole = null; // participantCode currently showing the role editor
 
-  var ROLES = ['merchant','traveler','translator','innkeeper','guard','storyteller','pilgrim','caravan-guide','spice-trader','messenger'];
+  var ROLES = ['p1','p2','p3','p4','p5'];
   var VENUES = [['yildiz-museum','Yıldız Museum'],['catalhoyuk','Çatalhöyük'],['ciurlionis','Čiurlionis Museum'],['fondazione-ago','Fondazione AGO']];
-  ROLES.forEach(function(r){ var o = document.createElement('option'); o.value = r; o.textContent = r; uploadRole.appendChild(o); });
+  var roleSuggestions = document.getElementById('roleSuggestions');
+  ROLES.concat(['score']).forEach(function(r){ var o = document.createElement('option'); o.value = r; roleSuggestions.appendChild(o); });
   VENUES.forEach(function(v){ var o = document.createElement('option'); o.value = v[0]; o.textContent = v[1]; uploadVenue.appendChild(o); });
 
   function venueLabel(v){
@@ -352,13 +436,14 @@
 
   /* ---------- Tabs ---------- */
   var tabBtns = document.querySelectorAll('.tabBtn');
-  var tabPanels = { live: document.getElementById('tab-live'), registrations: document.getElementById('tab-registrations'), library: document.getElementById('tab-library') };
+  var tabPanels = { live: document.getElementById('tab-live'), score: document.getElementById('tab-score'), registrations: document.getElementById('tab-registrations'), library: document.getElementById('tab-library') };
   Array.prototype.forEach.call(tabBtns, function(btn){
     btn.addEventListener('click', function(){
       Array.prototype.forEach.call(tabBtns, function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       Object.keys(tabPanels).forEach(function(k){ tabPanels[k].style.display = (k === btn.dataset.tab) ? '' : 'none'; });
       if (btn.dataset.tab === 'registrations') renderRegistrations();
+      if (btn.dataset.tab === 'score'){ renderScoreSetup(); renderScoreStep(); }
     });
   });
 
@@ -478,6 +563,7 @@
         renderOnlineChips();
       }
       renderWhisperTriggers();
+      if (tabPanels.score.style.display !== 'none'){ renderScoreSetup(); renderScoreStep(); }
     }).catch(function(){});
   }
 
@@ -712,6 +798,248 @@
       refreshPresence();
     }).catch(function(){ showToast('Failed to delete'); });
   }
+
+  /* ---------- Score Runner (Pilot Score 01, YTU Museum) ---------- */
+  var SCORE_POSITIONS = ['p1', 'p2', 'p3', 'p4', 'p5'];
+
+  // Cue "slug" -> the phrase spoken in the whisper file, used to fuzzy-match
+  // against uploaded labels (role "score"). null = that position stays silent.
+  var SCORE_STEPS = [
+    { time: '0:00',  phase: '0 · Arrival',                 sound: 'low hum',      cues: { p1:'face the front', p2:'face the front', p3:'face the front', p4:'face the front', p5:'face the front' } },
+    { time: '5:00',  phase: '1 · Drill',                   sound: 'machine loop', cues: { p1:'walk the straight line', p2:'walk the straight line', p3:'walk the straight line', p4:'walk the straight line', p5:'walk the straight line' } },
+    { time: '8:00',  phase: '1 · Drill',                   sound: null,           cues: { p1:'turn on the count', p2:'turn on the count', p3:'turn on the count', p4:'turn on the count', p5:'turn on the count' } },
+    { time: '10:30', phase: '1 · Drill',                   sound: null,           cues: { p1:'keep the pace', p2:'keep the pace', p3:'keep the pace', p4:'keep the pace', p5:'keep the pace' } },
+    { time: '13:00', phase: '2 · Fracture — diverge',      sound: null,           cues: { p1:'continue', p2:'stop and watch', p3:'speed up', p4:'hold', p5:'continue' } },
+    { time: '18:00', phase: '2 · Fracture — rotate',       sound: null,           cues: { p1:'hold', p2:'speed up', p3:'stop and watch', p4:'continue', p5:'speed up' } },
+    { time: '23:00', phase: '3 · Turn',                    sound: 'water / steam', cues: { p1:null, p2:'offer your weight', p3:null, p4:'offer your weight', p5:null } },
+    { time: '25:30', phase: '3 · Turn',                    sound: null,           cues: { p1:'offer your weight', p2:null, p3:null, p4:null, p5:'offer your weight' } },
+    { time: '28:00', phase: '3 · Turn',                    sound: null,           cues: { p1:null, p2:null, p3:'offer your weight', p4:null, p5:null } },
+    { time: '33:00', phase: '4 · Re-orientation',          sound: 'shared tone',  cues: { p1:'move only when moved', p2:'decide without speaking', p3:'move only when moved', p4:'arrive together', p5:'decide without speaking' } },
+    { time: '38:00', phase: '4 · Re-orient — converge',    sound: null,           cues: { p1:'arrive together', p2:'arrive together', p3:'arrive together', p4:'arrive together', p5:'arrive together' } },
+    { time: '41:00', phase: '5 · Exit',                    sound: null,           cues: { p1:'step out — note what your body remembers', p2:'step out — note what your body remembers', p3:'step out — note what your body remembers', p4:'step out — note what your body remembers', p5:'step out — note what your body remembers' } }
+  ];
+
+  var scoreAssignments = {}; // position -> participantCode
+  var scoreStepIndex = 0;
+  var scoreStartedAt = null;
+  var scoreClockTimer = null;
+
+  var scoreSetupEl = document.getElementById('scoreSetup');
+  var scoreClockEl = document.getElementById('scoreClock');
+  var scorePhaseEl = document.getElementById('scorePhase');
+  var scoreStartBtn = document.getElementById('scoreStartBtn');
+  var scoreResetBtn = document.getElementById('scoreResetBtn');
+  var scoreSoundRowEl = document.getElementById('scoreSoundRow');
+  var scoreCuesEl = document.getElementById('scoreCues');
+  var scorePrevBtn = document.getElementById('scorePrevBtn');
+  var scoreSendBtn = document.getElementById('scoreSendBtn');
+  var scoreNextBtn = document.getElementById('scoreNextBtn');
+  var scoreTimelineEl = document.getElementById('scoreTimeline');
+
+  function normalizePhrase(s){
+    return String(s).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function scoreWhispers(){
+    return assets.filter(function(a){ return a.layer === 'whisper' && a.role === 'score'; });
+  }
+
+  function findWhisperAsset(phrase){
+    if (!phrase) return null;
+    var norm = normalizePhrase(phrase);
+    var pool = scoreWhispers();
+    var exact = pool.find(function(w){ return normalizePhrase(w.label.replace(/\.mp3$/i, '')) === norm; });
+    if (exact) return exact;
+    return pool.find(function(w){ return normalizePhrase(w.label).indexOf(norm) !== -1; }) || null;
+  }
+
+  function findMoodAsset(phrase){
+    if (!phrase) return null;
+    var norm = normalizePhrase(phrase).replace(/\s/g, '-');
+    var pool = assets.filter(function(a){ return a.layer === 'mood'; });
+    return pool.find(function(m){ return m.mood_key === norm || m.mood_key.indexOf(norm) !== -1; }) || null;
+  }
+
+  function renderScoreSetup(){
+    scoreSetupEl.innerHTML = '';
+    var venuePeople = people; // already scoped to venueSelect.value by refreshPresence
+    SCORE_POSITIONS.forEach(function(pos){
+      var row = document.createElement('div');
+      row.className = 'setupRow';
+      var label = document.createElement('div');
+      label.className = 'setupLabel';
+      label.textContent = pos.toUpperCase();
+      var sel = document.createElement('select');
+      var noneOpt = document.createElement('option');
+      noneOpt.value = '';
+      noneOpt.textContent = '— not assigned —';
+      sel.appendChild(noneOpt);
+      // Server truth only — a person's role field is the single source of
+      // truth for who holds this position, so a reassignment elsewhere can
+      // never leave a stale name showing here.
+      var holder = venuePeople.find(function(p){ return p.role === pos; });
+      scoreAssignments[pos] = holder ? holder.participantCode : null;
+      venuePeople.forEach(function(p){
+        var o = document.createElement('option');
+        o.value = p.participantCode;
+        o.textContent = p.firstName + ' ' + p.lastName + ' · #' + p.participantCode + (p.active ? ' 🟢' : '');
+        if (p.role === pos) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', function(){
+        scoreAssignments[pos] = sel.value || null;
+        var code = sel.value;
+        if (code){
+          api('/api/admin/update-role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ participantCode: code, role: pos })
+          }).then(function(){ showToast(pos.toUpperCase() + ' assigned'); }).catch(function(){});
+        }
+      });
+      row.appendChild(label);
+      row.appendChild(sel);
+      scoreSetupEl.appendChild(row);
+    });
+  }
+
+  function formatClock(totalSeconds){
+    var m = Math.floor(totalSeconds / 60);
+    var s = Math.floor(totalSeconds % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function tickScoreClock(){
+    if (!scoreStartedAt) return;
+    var elapsed = (Date.now() - scoreStartedAt) / 1000;
+    scoreClockEl.textContent = formatClock(elapsed);
+  }
+
+  function renderScoreStep(){
+    var step = SCORE_STEPS[scoreStepIndex];
+    scorePhaseEl.textContent = '[' + step.time + '] ' + step.phase + (step.sound ? '  ·  sound: ' + step.sound : '');
+
+    scoreSoundRowEl.innerHTML = '';
+    if (step.sound){
+      var lbl = document.createElement('span');
+      lbl.className = 'scoreSoundLabel';
+      lbl.textContent = 'Set background to "' + step.sound + '":';
+      scoreSoundRowEl.appendChild(lbl);
+      var moods = assets.filter(function(a){ return a.layer === 'mood'; });
+      var seen = {};
+      moods.forEach(function(m){
+        if (seen[m.mood_key]) return;
+        seen[m.mood_key] = true;
+        var btn = document.createElement('button');
+        btn.className = 'moodBtn';
+        var suggested = findMoodAsset(step.sound);
+        if (suggested && suggested.mood_key === m.mood_key) btn.classList.add('active');
+        btn.textContent = m.mood_key;
+        btn.addEventListener('click', function(){
+          api('/api/admin/set-mood', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ venue: venueSelect.value, moodKey: m.mood_key })
+          }).then(function(){ showToast('Sound: ' + m.mood_key); }).catch(function(){});
+        });
+        scoreSoundRowEl.appendChild(btn);
+      });
+    }
+
+    scoreCuesEl.innerHTML = '';
+    var grid = document.createElement('div');
+    grid.className = 'cueGrid';
+    SCORE_POSITIONS.forEach(function(pos){
+      var phrase = step.cues[pos];
+      var card = document.createElement('div');
+      card.className = 'cueCard' + (!phrase ? ' silent' : '');
+      var posLine = document.createElement('div');
+      posLine.className = 'cuePosition';
+      posLine.textContent = pos.toUpperCase();
+      var assignedCode = scoreAssignments[pos];
+      var person = people.find(function(p){ return p.participantCode === assignedCode; });
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'cuePositionName';
+      nameSpan.textContent = person ? (person.firstName + (person.active ? ' 🟢' : ' ⚪') ) : 'unassigned';
+      posLine.appendChild(nameSpan);
+      card.appendChild(posLine);
+      var text = document.createElement('div');
+      text.className = 'cueText';
+      text.textContent = phrase ? phrase : '(stays silent)';
+      card.appendChild(text);
+      if (phrase && !findWhisperAsset(phrase)){
+        card.classList.add('missing');
+        var miss = document.createElement('div');
+        miss.className = 'cueMissing';
+        miss.textContent = '⚠ no matching audio uploaded yet';
+        card.appendChild(miss);
+      }
+      grid.appendChild(card);
+    });
+    scoreCuesEl.appendChild(grid);
+
+    renderScoreTimeline();
+    scorePrevBtn.disabled = scoreStepIndex === 0;
+    scoreNextBtn.disabled = scoreStepIndex === SCORE_STEPS.length - 1;
+  }
+
+  function renderScoreTimeline(){
+    scoreTimelineEl.innerHTML = '';
+    SCORE_STEPS.forEach(function(step, i){
+      var row = document.createElement('div');
+      row.className = 'timelineRow' + (i === scoreStepIndex ? ' current' : '') + (i < scoreStepIndex ? ' done' : '');
+      var t = document.createElement('div');
+      t.className = 'timelineTime';
+      t.textContent = step.time;
+      var p = document.createElement('div');
+      p.className = 'timelinePhase';
+      p.textContent = step.phase + (step.sound ? ' · ' + step.sound : '');
+      row.appendChild(t);
+      row.appendChild(p);
+      row.addEventListener('click', function(){ scoreStepIndex = i; renderScoreStep(); });
+      scoreTimelineEl.appendChild(row);
+    });
+  }
+
+  function sendScoreStep(){
+    var step = SCORE_STEPS[scoreStepIndex];
+    var sent = 0;
+    SCORE_POSITIONS.forEach(function(pos){
+      var phrase = step.cues[pos];
+      if (!phrase) return;
+      var whisper = findWhisperAsset(phrase);
+      var code = scoreAssignments[pos];
+      if (!whisper || !code) return;
+      api('/api/admin/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venue: venueSelect.value, assetUrl: whisper.url, targetParticipantCode: code })
+      }).catch(function(){});
+      sent++;
+    });
+    showToast('Sent step [' + step.time + '] to ' + sent + ' position(s)');
+    if (scoreStepIndex < SCORE_STEPS.length - 1){
+      scoreStepIndex++;
+      renderScoreStep();
+    }
+  }
+
+  scoreStartBtn.addEventListener('click', function(){
+    scoreStartedAt = Date.now();
+    if (scoreClockTimer) clearInterval(scoreClockTimer);
+    scoreClockTimer = setInterval(tickScoreClock, 500);
+    showToast('Score started — clock running');
+  });
+  scoreResetBtn.addEventListener('click', function(){
+    scoreStartedAt = null;
+    if (scoreClockTimer) clearInterval(scoreClockTimer);
+    scoreClockEl.textContent = '0:00';
+    scoreStepIndex = 0;
+    renderScoreStep();
+  });
+  scorePrevBtn.addEventListener('click', function(){ if (scoreStepIndex > 0){ scoreStepIndex--; renderScoreStep(); } });
+  scoreNextBtn.addEventListener('click', function(){ if (scoreStepIndex < SCORE_STEPS.length - 1){ scoreStepIndex++; renderScoreStep(); } });
+  scoreSendBtn.addEventListener('click', sendScoreStep);
 
   /* ---------- Library tab ---------- */
   function fileRow(asset){

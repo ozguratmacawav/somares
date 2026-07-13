@@ -1,9 +1,5 @@
 const { ensureSchema, getAudioManifest, latestTriggerId } = require('../lib/db');
 
-const KNOWN_ROLES = new Set([
-  'merchant', 'traveler', 'translator', 'innkeeper', 'guard',
-  'storyteller', 'pilgrim', 'caravan-guide', 'spice-trader', 'messenger'
-]);
 const KNOWN_VENUES = new Set([
   'yildiz-museum', 'catalhoyuk', 'ciurlionis', 'fondazione-ago'
 ]);
@@ -16,7 +12,9 @@ module.exports = async (req, res) => {
 
   const { venue, role } = req.query;
 
-  if (!venue || !KNOWN_VENUES.has(venue) || !role || !KNOWN_ROLES.has(role)) {
+  // Roles are free text (default decks, or hand-typed custom ones from the
+  // admin/conductor role editor) — only the venue is a fixed set.
+  if (!venue || !KNOWN_VENUES.has(venue) || !role) {
     res.status(400).json({ error: 'valid venue and role are required' });
     return;
   }
