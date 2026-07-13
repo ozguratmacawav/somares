@@ -287,10 +287,10 @@
 
   function deleteRegistration(code, name){
     if (!confirm('Delete ' + name + '\'s registration? This can\'t be undone.')) return;
-    fetch('/api/admin/delete-registration', {
+    fetch('/api/admin/registrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-key': sessionStorage.getItem('somares_admin_key') },
-      body: JSON.stringify({ participantCode: code })
+      body: JSON.stringify({ action: 'delete', participantCode: code })
     }).then(function(){
       if (expandedCode === code) expandedCode = null;
       return load(sessionStorage.getItem('somares_admin_key'));
@@ -329,10 +329,10 @@
     saveBtn.addEventListener('click', function(){
       var newRole = sel.value === '__custom__' ? customInput.value.trim() : sel.value;
       if (!newRole) return;
-      fetch('/api/admin/update-role', {
+      fetch('/api/admin/registrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': sessionStorage.getItem('somares_admin_key') },
-        body: JSON.stringify({ participantCode: code, role: newRole })
+        body: JSON.stringify({ action: 'updateRole', participantCode: code, role: newRole })
       }).then(function(r){
         roleMsg.textContent = r.ok ? 'Saved.' : 'Failed to save.';
         assetsByRole = {};

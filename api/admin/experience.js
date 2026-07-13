@@ -1,4 +1,4 @@
-const { ensureSchema, startExperience } = require('../../lib/db');
+const { ensureSchema, startExperience, resetExperience } = require('../../lib/db');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { venue } = req.body || {};
+  const { venue, action } = req.body || {};
   if (!venue) {
     res.status(400).json({ error: 'venue is required' });
     return;
@@ -20,10 +20,17 @@ module.exports = async (req, res) => {
 
   try {
     await ensureSchema();
+
+    if (action === 'reset') {
+      await resetExperience(venue);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     const startedAt = await startExperience(venue);
     res.status(200).json({ ok: true, startedAt });
   } catch (err) {
-    console.error('start-experience failed', err);
-    res.status(500).json({ error: 'Failed to start' });
+    console.error('experience endpoint failed', err);
+    res.status(500).json({ error: 'Request failed' });
   }
 };

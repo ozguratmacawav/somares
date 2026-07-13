@@ -802,10 +802,10 @@
           saveBtn.addEventListener('click', function(){
             var newRole = sel.value === '__custom__' ? customInput.value.trim() : sel.value;
             if (!newRole) return;
-            api('/api/admin/update-role', {
+            api('/api/admin/registrations', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ participantCode: p.participantCode, role: newRole })
+              body: JSON.stringify({ action: 'updateRole', participantCode: p.participantCode, role: newRole })
             }).then(function(){
               showToast('Role updated');
               editingRole = null;
@@ -832,10 +832,10 @@
 
   function deleteRegistration(code, name){
     if (!confirm('Delete ' + name + '\'s registration? This can\'t be undone.')) return;
-    api('/api/admin/delete-registration', {
+    api('/api/admin/registrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ participantCode: code })
+      body: JSON.stringify({ action: 'delete', participantCode: code })
     }).then(function(){
       showToast('Deleted');
       renderRegistrations();
@@ -947,10 +947,10 @@
         scoreAssignments[pos] = sel.value || null;
         var code = sel.value;
         if (code){
-          api('/api/admin/update-role', {
+          api('/api/admin/registrations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ participantCode: code, role: pos })
+            body: JSON.stringify({ action: 'updateRole', participantCode: code, role: pos })
           }).then(function(){ showToast(pos.toUpperCase() + ' assigned'); }).catch(function(){});
         }
       });
@@ -1085,10 +1085,10 @@
     // This is the synchronized start: every registered phone at this venue
     // is silently polling for it and begins playback the moment it appears —
     // so all 5 positions start together instead of whenever each tapped Begin.
-    api('/api/admin/start-experience', {
+    api('/api/admin/experience', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venue: venueSelect.value })
+      body: JSON.stringify({ action: 'start', venue: venueSelect.value })
     }).then(function(){
       scoreStartedAt = Date.now();
       if (scoreClockTimer) clearInterval(scoreClockTimer);
@@ -1097,10 +1097,10 @@
     }).catch(function(){ showToast('Failed to start'); });
   });
   scoreResetBtn.addEventListener('click', function(){
-    api('/api/admin/reset-experience', {
+    api('/api/admin/experience', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venue: venueSelect.value })
+      body: JSON.stringify({ action: 'reset', venue: venueSelect.value })
     }).catch(function(){});
     scoreStartedAt = null;
     if (scoreClockTimer) clearInterval(scoreClockTimer);
@@ -1168,10 +1168,10 @@
 
   function deleteAsset(id){
     if (!confirm('Delete this clip? This can\'t be undone.')) return;
-    api('/api/admin/delete-asset', {
+    api('/api/admin/audio-assets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: id })
+      body: JSON.stringify({ action: 'delete', id: id })
     }).then(function(){
       showToast('Deleted');
       return loadAssets();
