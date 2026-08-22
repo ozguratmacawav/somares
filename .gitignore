@@ -17,4 +17,9 @@ node_modules/
 /Audio Files/
 /Layer_1_Whispers/
 
+# Source audio files — already uploaded to Vercel Blob via scripts/upload-catalhoyuk.js
+/Somares-Çatalhöyük/
+
+.env*
+
 .env*

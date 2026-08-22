@@ -1,8 +1,7 @@
-const { ensureSchema, getAudioManifest, latestTriggerId } = require('../lib/db');
+const { ensureSchema, getAudioManifest } = require('../lib/db');
 
-const KNOWN_VENUES = new Set([
-  'yildiz-museum', 'catalhoyuk', 'ciurlionis', 'fondazione-ago'
-]);
+const KNOWN_VENUES = new Set(['catalhoyuk-home']);
+const KNOWN_ROLES = new Set(['housekeeper', 'food-provider', 'maker', 'memory-keeper']);
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -12,9 +11,7 @@ module.exports = async (req, res) => {
 
   const { venue, role } = req.query;
 
-  // Roles are free text (default decks, or hand-typed custom ones from the
-  // admin/conductor role editor) — only the venue is a fixed set.
-  if (!venue || !KNOWN_VENUES.has(venue) || !role) {
+  if (!venue || !KNOWN_VENUES.has(venue) || !role || !KNOWN_ROLES.has(role)) {
     res.status(400).json({ error: 'valid venue and role are required' });
     return;
   }
@@ -22,9 +19,6 @@ module.exports = async (req, res) => {
   try {
     await ensureSchema();
     const manifest = await getAudioManifest(venue, role);
-    // Baseline so a freshly-joined participant only reacts to triggers fired
-    // after they arrived, not the venue's entire trigger history.
-    manifest.sinceId = await latestTriggerId(venue);
     res.status(200).json(manifest);
   } catch (err) {
     console.error('audio-manifest failed', err);

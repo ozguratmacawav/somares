@@ -1,10 +1,8 @@
 const { put } = require('@vercel/blob');
 const { ensureSchema, insertAudioAsset } = require('../../lib/db');
 
-const KNOWN_VENUES = new Set([
-  'yildiz-museum', 'catalhoyuk', 'ciurlionis', 'fondazione-ago'
-]);
-const KNOWN_LAYERS = new Set(['whisper', 'mood', 'ambience']);
+const KNOWN_VENUES = new Set(['catalhoyuk-home']);
+const KNOWN_LAYERS = new Set(['whisper', 'ambience']);
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -18,7 +16,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { layer, role, venue, moodKey, label, dataBase64, volume, category } = req.body || {};
+  const { layer, role, venue, label, dataBase64, volume } = req.body || {};
 
   if (!layer || !KNOWN_LAYERS.has(layer) || !label || !dataBase64) {
     res.status(400).json({ error: 'layer, label and dataBase64 are required' });
@@ -32,25 +30,20 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'a valid venue is required for ambience uploads' });
     return;
   }
-  if (layer === 'mood' && !moodKey) {
-    res.status(400).json({ error: 'a moodKey is required for mood uploads' });
-    return;
-  }
 
   try {
     await ensureSchema();
 
     const buffer = Buffer.from(dataBase64, 'base64');
-    // ~4.4MB is roughly the request body ceiling for this function — keep
-    // clips well under that (short whispers, moderate-length loops).
+    // ~4.4MB is roughly the request body ceiling for this function — fine
+    // for individual spoken clips; the 20-minute background bed is uploaded
+    // directly via the bulk script instead, bypassing this HTTP limit.
     if (buffer.length > 4 * 1024 * 1024) {
-      res.status(400).json({ error: 'File too large (max ~4MB). Try a lower bitrate export.' });
+      res.status(400).json({ error: 'File too large (max ~4MB). Use the bulk upload script for long files.' });
       return;
     }
 
-    var pathPrefix = layer === 'whisper' ? 'whispers/' + role
-      : layer === 'ambience' ? 'ambiences/' + venue
-      : 'moods';
+    var pathPrefix = layer === 'whisper' ? 'whispers/' + role : 'ambiences/' + venue;
 
     const blob = await put(pathPrefix + '/' + label, buffer, {
       access: 'public',
@@ -59,10 +52,9 @@ module.exports = async (req, res) => {
     });
 
     const id = await insertAudioAsset({
-      layer, role: role || null, venue: venue || null, moodKey: moodKey || null,
+      layer, role: role || null, venue: venue || null,
       label, url: blob.url,
-      volume: volume != null && volume !== '' ? Number(volume) : 1.0,
-      category: layer === 'mood' && category === 'texture' ? 'texture' : 'state'
+      volume: volume != null && volume !== '' ? Number(volume) : 1.0
     });
 
     res.status(200).json({ id, url: blob.url });

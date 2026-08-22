@@ -1,4 +1,4 @@
-const { ensureSchema, startExperience, resetExperience, setAmbienceMute } = require('../../lib/db');
+const { ensureSchema, resetSession, requestResync } = require('../../lib/db');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -13,28 +13,32 @@ module.exports = async (req, res) => {
   }
 
   const { venue, action } = req.body || {};
-  if (!venue) {
-    res.status(400).json({ error: 'venue is required' });
-    return;
-  }
 
   try {
     await ensureSchema();
 
     if (action === 'reset') {
-      await resetExperience(venue);
+      if (!venue) {
+        res.status(400).json({ error: 'venue is required' });
+        return;
+      }
+      await resetSession(venue);
       res.status(200).json({ ok: true });
       return;
     }
 
-    if (action === 'setAmbienceMute') {
-      await setAmbienceMute(venue, req.body.muted || []);
-      res.status(200).json({ ok: true });
+    if (action === 'forceResync') {
+      const { participantCode } = req.body || {};
+      if (!participantCode) {
+        res.status(400).json({ error: 'participantCode is required' });
+        return;
+      }
+      const at = await requestResync(participantCode);
+      res.status(200).json({ ok: true, forceResyncAt: at });
       return;
     }
 
-    const startedAt = await startExperience(venue);
-    res.status(200).json({ ok: true, startedAt });
+    res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
     console.error('experience endpoint failed', err);
     res.status(500).json({ error: 'Request failed' });

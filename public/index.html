@@ -275,6 +275,14 @@
 
   .pid span{ color:var(--silver); font-weight:600; }
 
+  .joinCount{
+    margin:16px 0 20px;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--amber-light);
+  }
+
   .player{
     display:none;
     flex-direction:column;
@@ -381,16 +389,7 @@
     <div class="field">
       <input type="text" id="lastName" placeholder="Last Name" autocomplete="family-name" required>
     </div>
-    <div class="field">
-      <select id="venue" required>
-        <option value="" disabled selected>Select Location</option>
-        <option value="yildiz-museum">Yıldız Museum — YTU, Istanbul, Türkiye</option>
-        <option value="catalhoyuk">Çatalhöyük — Konya, Türkiye</option>
-        <option value="ciurlionis">M.K. Čiurlionis Museum — Lithuania</option>
-        <option value="fondazione-ago">Fondazione AGO — Italy</option>
-      </select>
-    </div>
-    <button type="submit" class="submit" id="submitBtn">Begin</button>
+    <button type="submit" class="submit" id="submitBtn">Join</button>
   </form>
 
   <div class="confirm" id="confirmBox">
@@ -400,8 +399,10 @@
       </svg>
     </div>
     <h2>You're Ready</h2>
-    <p>Put on your headphones and wait for the sound to begin. The experience will start before you notice.</p>
+    <p>Put on your headphones. Find at least 3×3 metres of clear space. You'll need at least 4 people — when everyone is ready, anyone can start.</p>
     <div class="pid">Participant No <span id="pidValue">—</span></div>
+    <div class="joinCount" id="joinCount">1 joined</div>
+    <button class="submit" id="startBtn">Start for Everyone</button>
   </div>
 
   <div class="player" id="playerBox">
@@ -594,57 +595,141 @@
   }
   requestAnimationFrame(loop);
 
+  /* ---------- Playback schedule ---------- */
+  // Absolute seconds since the shared synchronized start. Commands 1-9 are
+  // identical for every role and land exactly on 6:00; command 10 (role
+  // reveal) and the retreat (15/17) are fixed, shared moments too. Only
+  // 11-14 (the asymmetric role work) differ in content AND in timing across
+  // the four roles — but all four still arrive at the 18:41 retreat cue
+  // together, whatever point they've each reached.
+  var SHARED_SEQUENCE = [
+    { t: 0.00, key: 'intro' },
+    { t: 42.94, key: 'cmd1' },
+    { t: 64.70, key: 'cmd2' },
+    { t: 94.87, key: 'cmd3a' },
+    { t: 106.57, key: 'cmd3b' },
+    { t: 118.42, key: 'cmd3c' },
+    { t: 138.79, key: 'cmd4' },
+    { t: 159.45, key: 'cmd5a' },
+    { t: 174.91, key: 'cmd5b' },
+    { t: 186.06, key: 'cmd5c' },
+    { t: 197.91, key: 'cmd5d' },
+    { t: 216.66, key: 'cmd6a' },
+    { t: 230.84, key: 'cmd6b' },
+    { t: 253.96, key: 'cmd7' },
+    { t: 276.71, key: 'cmd8a' },
+    { t: 298.73, key: 'cmd8b' },
+    { t: 337.91, key: 'cmd9a' },
+    { t: 351.51, key: 'cmd9b' }
+  ];
+
+  var ROLE_SCHEDULES = {
+    'housekeeper': [
+      { t: 360.00, key: 'cmd10' },
+      { t: 450.00, key: 'cmd11' },
+      { t: 621.88, key: 'cmd12' },
+      { t: 789.03, key: 'cmd13' },
+      { t: 955.16, key: 'cmd14' }
+    ],
+    'food-provider': [
+      { t: 360.00, key: 'cmd10' },
+      { t: 450.00, key: 'cmd11' },
+      { t: 616.77, key: 'cmd12' },
+      { t: 788.74, key: 'cmd13' },
+      { t: 954.80, key: 'cmd14' }
+    ],
+    'maker': [
+      { t: 360.00, key: 'cmd10' },
+      { t: 450.00, key: 'cmd11' },
+      { t: 617.19, key: 'cmd12' },
+      { t: 783.12, key: 'cmd13' },
+      { t: 953.88, key: 'cmd14' }
+    ],
+    'memory-keeper': [
+      { t: 360.00, key: 'cmd10' },
+      { t: 450.00, key: 'cmd11' },
+      { t: 617.94, key: 'cmd12' },
+      { t: 784.92, key: 'cmd13' },
+      { t: 952.68, key: 'cmd14' }
+    ]
+  };
+
+  var RETREAT_SEQUENCE = [
+    { t: 1121.40, key: 'cmd15' },
+    { t: 1185.00, key: 'cmd17' }
+  ];
+
+  var FADEOUT_START = 1140;   // 19:00 — background starts fading
+  var EXPERIENCE_END = 1200;  // 20:00 — background fully silent, session over
+  var LATE_SKIP_THRESHOLD = 20; // seconds late before we skip a stale cue instead of playing it
+
+  function scheduleForRole(role){
+    return SHARED_SEQUENCE.concat(ROLE_SCHEDULES[role] || []).concat(RETREAT_SEQUENCE)
+      .slice()
+      .sort(function(a, b){ return a.t - b.t; });
+  }
+
   /* ---------- Audio engine ---------- */
-  // Layers, mixed live in the browser — no server-side audio streaming needed.
-  // ambience = constant per-venue bed(s) (own per-track volume, never stops).
-  // texture  = machine/hiss/army-type room-sound clips that fade in and out
-  //            on their own, blending into the ambience (auto, or manually
-  //            overridden by the conductor via a "texture" channel trigger).
-  // mood     = one persistent swappable emotional/phase state, crossfaded.
-  // whisper  = one-shot instructions, role-scheduled or conductor-triggered.
+  // Fully pre-scheduled and client-driven: once the shared clock starts,
+  // nothing is triggered over the network — every clip's timing is computed
+  // locally from elapsed time, so a network hiccup can never drop a cue.
   var Engine = (function(){
     var audioCtx = null;
     var gains = {};
     var muted = false;
-    var bufferCache = {};      // url -> decoded AudioBuffer, for instant re-use
-    var moodBuffers = {};      // moodKey -> AudioBuffer (all preloaded)
-    var moodNode = null;       // { source, gain } for the currently playing mood
-    var currentMoodKey = null;
-    var texturePool = [];      // [{ url, label, volume }]
-    var textureCurrent = null; // { source, gain } for the currently playing texture
-    var textureTimer = null;
-    var venue = null, role = null, participantCode = null;
-    var ambienceTracks = [];
-    var ambienceSources = []; // currently-playing ambience source nodes, so a "restart" trigger can stop + relaunch them
-    var lastTriggerId = 0;
-    var pollTimer = null;
-    var started = false;       // true once the conductor's synchronized start fired
-    var onBegin = null;        // UI callback once playback actually starts
+    var bufferCache = {};
+    var wakeLock = null;
 
-    // Must be called synchronously inside a real user-gesture handler (the
-    // "Begin" tap) — mobile browsers refuse to start audio otherwise. Only
-    // opens the audio graph; nothing plays until begin() is called.
+    var venue = null, role = null, participantCode = null;
+    var manifest = null;
+    var schedule = [];
+    var playedKeys = {};
+    var fillerSchedule = [];
+    var playedFillers = {};
+    var startedAtMs = null;
+    var started = false;
+    var tickTimer = null;
+    var lastHandledResync = null;
+    var onBegin = null;
+    var onEnd = null;
+    var ended = false;
+
+    function requestWakeLock(){
+      if (wakeLock || !('wakeLock' in navigator)) return;
+      navigator.wakeLock.request('screen').then(function(lock){
+        wakeLock = lock;
+        lock.addEventListener('release', function(){ wakeLock = null; });
+      }).catch(function(){});
+    }
+
+    // Screen locks and backgrounded tabs throttle timers and can suspend the
+    // audio context — on return, resume everything and immediately
+    // re-check the schedule so we catch up rather than staying silent.
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible'){
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        requestWakeLock();
+        if (started) tick();
+      }
+    });
+
+    // Must be called synchronously inside a real user-gesture handler.
     function unlock(){
       if (audioCtx) return;
       var Ctx = window.AudioContext || window.webkitAudioContext;
       audioCtx = new Ctx();
-      gains.ambience = audioCtx.createGain();
-      gains.texture = audioCtx.createGain();
-      gains.mood = audioCtx.createGain();
-      gains.whisper = audioCtx.createGain();
-      gains.ambience.gain.value = 0.42;
-      gains.texture.gain.value = 0.3;
-      gains.mood.gain.value = 0.32;
-      gains.whisper.gain.value = 0.9;
-      gains.ambience.connect(audioCtx.destination);
-      gains.texture.connect(audioCtx.destination);
-      gains.mood.connect(audioCtx.destination);
-      gains.whisper.connect(audioCtx.destination);
-      // iOS/Safari sometimes create the context suspended even on a tap.
+      gains.background = audioCtx.createGain();
+      gains.voice = audioCtx.createGain();
+      gains.background.gain.value = 0.55;
+      gains.voice.gain.value = 0.95;
+      gains.background.connect(audioCtx.destination);
+      gains.voice.connect(audioCtx.destination);
       if (audioCtx.state === 'suspended') audioCtx.resume();
+      requestWakeLock();
     }
 
     function loadBuffer(url){
+      if (!url) return Promise.resolve(null);
       if (bufferCache[url]) return Promise.resolve(bufferCache[url]);
       return fetch(url)
         .then(function(r){ return r.arrayBuffer(); })
@@ -652,241 +737,198 @@
         .then(function(buf){ bufferCache[url] = buf; return buf; });
     }
 
-    function playLoop(buffer, gainNode, volume){
-      var g = gainNode;
-      if (volume != null && volume !== 1){
-        g = audioCtx.createGain();
-        g.gain.value = volume;
-        g.connect(gainNode);
-      }
+    function playOneShot(url){
+      var buf = bufferCache[url];
+      if (!buf) return;
       var src = audioCtx.createBufferSource();
-      src.buffer = buffer;
-      src.loop = true;
-      src.connect(g);
+      src.buffer = buf;
+      src.connect(gains.voice);
       src.start();
       return src;
     }
 
-    // Like playLoop, but always gives the track its own gain node (even at
-    // volume 1) so it can be muted/unmuted independently later — used for
-    // ambience tracks, which the conductor can turn on/off per-track live.
-    function playLoopIndependent(buffer, gainNode, volume){
-      var g = audioCtx.createGain();
-      g.gain.value = volume != null ? volume : 1;
-      g.connect(gainNode);
-      var src = audioCtx.createBufferSource();
-      src.buffer = buffer;
-      src.loop = true;
-      src.connect(g);
-      src.start();
-      return { source: src, gain: g };
+    function urlForKey(key){
+      return (manifest.shared && manifest.shared[key]) || (manifest.own && manifest.own[key]) || null;
     }
 
-    function playOneShot(buffer, gainNode){
-      var src = audioCtx.createBufferSource();
-      src.buffer = buffer;
-      src.connect(gainNode);
-      src.start();
-      return src;
-    }
-
-    // Crossfades from whatever mood is currently playing to a new one.
-    function setMood(moodKey){
-      if (moodKey === currentMoodKey || !moodBuffers[moodKey]) return;
-      var t = audioCtx.currentTime;
-      var prev = moodNode;
-
-      var g = audioCtx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(1, t + 2.5);
-      g.connect(gains.mood);
-      var src = audioCtx.createBufferSource();
-      src.buffer = moodBuffers[moodKey];
-      src.loop = true;
-      src.connect(g);
-      src.start();
-      moodNode = { source: src, gain: g };
-      currentMoodKey = moodKey;
-
-      if (prev){
-        prev.gain.gain.setValueAtTime(prev.gain.gain.value, t);
-        prev.gain.gain.linearRampToValueAtTime(0, t + 2.5);
-        prev.source.stop(t + 2.6);
-      }
-    }
-
-    // Room-sound texture layer: entirely conductor-triggered — nothing here
-    // plays on its own. A "texture" trigger fades a clip in, holds it, then
-    // fades it back out; the client never picks or schedules one by itself.
-    function fadeOutTexture(){
-      if (!textureCurrent) return;
-      var t = audioCtx.currentTime;
-      var node = textureCurrent;
-      node.gain.gain.cancelScheduledValues(t);
-      node.gain.gain.setValueAtTime(node.gain.gain.value, t);
-      node.gain.gain.linearRampToValueAtTime(0, t + 2.5);
-      node.source.stop(t + 2.6);
-      textureCurrent = null;
-    }
-
-    function playTexture(item, holdMs){
-      if (!bufferCache[item.url]) return;
-      fadeOutTexture();
-      var t = audioCtx.currentTime;
-      var g = audioCtx.createGain();
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(item.volume != null ? item.volume : 1, t + 2.5);
-      g.connect(gains.texture);
-      var src = audioCtx.createBufferSource();
-      src.buffer = bufferCache[item.url];
-      src.loop = true;
-      src.connect(g);
-      src.start();
-      textureCurrent = { source: src, gain: g };
-
-      if (textureTimer) clearTimeout(textureTimer);
-      textureTimer = setTimeout(function(){ fadeOutTexture(); }, holdMs);
-    }
-
-    function triggerTexture(url){
-      var item = texturePool.find(function(x){ return x.url === url; });
-      if (!item) return;
-      if (textureTimer) clearTimeout(textureTimer);
-      playTexture(item, 20000); // holds ~20s, then fades out and stays silent until triggered again
-    }
-
-    // Whispers are always delivered as a specific URL on a specific trigger
-    // (targeted by role or by this exact participant) — there's no pool to
-    // reload, so an operator's role change just needs to update what this
-    // client matches against on its next poll.
-    function switchRole(newRole){
-      role = newRole;
-    }
-
-    function pollVenueState(){
-      if (!venue || !role) return;
-      var url = '/api/venue-state?venue=' + encodeURIComponent(venue) + '&role=' + encodeURIComponent(role) + '&since=' + lastTriggerId;
-      if (participantCode) url += '&code=' + encodeURIComponent(participantCode);
-      fetch(url)
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-          applyAmbienceMute(data.ambienceMuted || []);
-          if (!started){
-            if (data.startedAt) beginPlayback();
-            return;
-          }
-          if (data.mood) setMood(data.mood);
-          if (data.role && data.role !== role) switchRole(data.role);
-          (data.triggers || []).forEach(function(trig){
-            lastTriggerId = Math.max(lastTriggerId, trig.id);
-            if (trig.channel === 'ambience-restart'){
-              startAmbience();
-            } else if (trig.channel === 'texture'){
-              loadBuffer(trig.url).then(function(){ triggerTexture(trig.url); });
-            } else {
-              loadBuffer(trig.url).then(function(buf){ playOneShot(buf, gains.whisper); });
-            }
-          });
-        })
-        .catch(function(){});
-    }
-
-    // Loads every buffer and starts polling, but plays nothing yet — the
-    // participant sits in a silent "waiting" state until the conductor's
-    // synchronized start signal arrives, so everyone begins together.
-    function prepare(manifest, venueKey, roleKey, participantCodeVal){
-      unlock();
+    // Loads every buffer this participant's role needs — background,
+    // shared, own, filler pool — before the waiting room ever offers Start.
+    function prepare(manifestData, venueKey, roleKey, participantCodeVal){
+      manifest = manifestData;
       venue = venueKey;
       role = roleKey;
       participantCode = participantCodeVal;
-      lastTriggerId = manifest.sinceId || 0;
+      schedule = scheduleForRole(role);
+
       var jobs = [];
+      Object.keys(manifest.shared || {}).forEach(function(k){ jobs.push(loadBuffer(manifest.shared[k])); });
+      Object.keys(manifest.own || {}).forEach(function(k){ jobs.push(loadBuffer(manifest.own[k])); });
+      (manifest.filler || []).forEach(function(f){ jobs.push(loadBuffer(f.url)); });
+      jobs.push(loadBuffer(manifest.background));
 
-      ambienceTracks = manifest.ambiences || [];
-      ambienceTracks.forEach(function(track){
-        jobs.push(loadBuffer(track.url).then(function(b){ track._buf = b; }));
-      });
-
-      Object.keys(manifest.moods).forEach(function(key){
-        jobs.push(loadBuffer(manifest.moods[key]).then(function(b){ moodBuffers[key] = b; }));
-      });
-
-      // Preloaded into bufferCache so a triggered whisper plays with zero
-      // latency later — no pool needed since each trigger names its own URL.
-      manifest.whispers.forEach(function(url){
-        jobs.push(loadBuffer(url));
-      });
-
-      texturePool = manifest.textures || [];
-      texturePool.forEach(function(item){ jobs.push(loadBuffer(item.url)); });
-
-      return Promise.all(jobs).then(function(){
-        pollTimer = setInterval(pollVenueState, 4000);
-        pollVenueState(); // check immediately in case the score already started
-      });
+      return Promise.all(jobs);
     }
 
-    // Ambience: every track loops forever, each at its own relative volume,
-    // each with its own gain node — so the conductor can independently mute
-    // just Dem, just Low Hum, both, or neither, live, without restarting
-    // anyone's playback. Kept separate from beginPlayback so a "restart
-    // background" trigger can relaunch it mid-session on its own.
-    var lastAmbienceMuted = [];
+    // Starts the 20-minute background bed at the correct offset (in case
+    // this device joined a few seconds after the shared start) and
+    // schedules its 19:00-20:00 fade-out via the audio clock itself, which
+    // keeps running precisely even if the JS timer loop gets throttled.
+    function startBackground(elapsedSec){
+      var buf = bufferCache[manifest.background];
+      if (!buf) return;
+      var offset = Math.max(0, Math.min(elapsedSec, buf.duration - 0.05));
+      var src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(gains.background);
+      var ctxNow = audioCtx.currentTime;
+      src.start(ctxNow, offset);
 
-    function startAmbience(){
-      ambienceSources.forEach(function(node){ try { node.source.stop(); } catch (e){} });
-      ambienceSources = [];
-      ambienceTracks.forEach(function(track){
-        if (track._buf){
-          var node = playLoopIndependent(track._buf, gains.ambience, track.volume);
-          node.label = track.label;
-          node.volume = track.volume != null ? track.volume : 1;
-          ambienceSources.push(node);
+      var fadeStartIn = FADEOUT_START - elapsedSec;
+      var fadeEndIn = EXPERIENCE_END - elapsedSec;
+      if (fadeEndIn > 0){
+        var atStart = ctxNow + Math.max(0, fadeStartIn);
+        var atEnd = ctxNow + Math.max(0.1, fadeEndIn);
+        gains.background.gain.setValueAtTime(muted ? 0 : 0.55, atStart);
+        gains.background.gain.linearRampToValueAtTime(0, atEnd);
+      }
+    }
+
+    function reportProgress(clipKey){
+      fetch('/api/venue-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venue: venue, action: 'report', code: participantCode, clip: clipKey })
+      }).catch(function(){});
+    }
+
+    // The heart of the engine: on every check, play whatever's due and
+    // hasn't played yet. Self-correcting by construction — if a check gets
+    // delayed (backgrounded tab, slow device), the next one just catches up
+    // instead of the schedule silently drifting or breaking.
+    var HEARTBEAT_MS = 10000;
+    var lastReportAt = 0;
+
+    function tick(){
+      if (!started || ended) return;
+      var elapsed = (Date.now() - startedAtMs) / 1000;
+      var firedNew = false;
+
+      schedule.forEach(function(entry){
+        if (playedKeys[entry.key]) return;
+        if (elapsed < entry.t) return;
+        playedKeys[entry.key] = true;
+        if (elapsed - entry.t <= LATE_SKIP_THRESHOLD){
+          playOneShot(urlForKey(entry.key));
+          reportProgress(entry.key);
+          lastReportAt = Date.now();
+          firedNew = true;
         }
       });
-      applyAmbienceMute(lastAmbienceMuted);
-    }
 
-    // mutedLabels: track labels (e.g. "Dem.mp3") that should currently be
-    // silent — every other ambience track ramps to its normal volume.
-    function applyAmbienceMute(mutedLabels){
-      lastAmbienceMuted = mutedLabels || [];
-      if (!audioCtx) return;
-      var t = audioCtx.currentTime;
-      ambienceSources.forEach(function(node){
-        var shouldMute = lastAmbienceMuted.indexOf(node.label) !== -1;
-        node.gain.gain.setTargetAtTime(shouldMute ? 0 : node.volume, t, 0.6);
+      fillerSchedule.forEach(function(f, i){
+        if (playedFillers[i]) return;
+        if (elapsed < f.t) return;
+        playedFillers[i] = true;
+        if (elapsed - f.t <= LATE_SKIP_THRESHOLD){
+          var item = (manifest.filler || [])[f.clip];
+          if (item) playOneShot(item.url);
+        }
       });
+
+      if (elapsed >= EXPERIENCE_END && !ended){
+        ended = true;
+        if (onEnd) onEnd();
+      } else if (!firedNew && Date.now() - lastReportAt >= HEARTBEAT_MS){
+        // Nothing new played — just a periodic "still here, still on track" ping.
+        reportProgress(playedKeysLastLabel());
+        lastReportAt = Date.now();
+      }
     }
 
-    // Only the ambience bed (Dem/Low Hum) starts on its own. Mood, sting,
-    // texture and whisper are all conductor-triggered from here on — the
-    // client never picks or schedules any of them by itself.
-    function beginPlayback(){
+    function playedKeysLastLabel(){
+      var last = null, lastT = -1;
+      schedule.forEach(function(entry){
+        if (playedKeys[entry.key] && entry.t > lastT){ last = entry.key; lastT = entry.t; }
+      });
+      return last;
+    }
+
+    function beginPlayback(startedAtIso, fillerScheduleData){
       if (started) return;
       started = true;
+      startedAtMs = new Date(startedAtIso).getTime();
+      fillerSchedule = fillerScheduleData || [];
 
-      startAmbience();
+      var elapsed = (Date.now() - startedAtMs) / 1000;
+      startBackground(elapsed);
+
+      tickTimer = setInterval(tick, 1000);
+      tick();
 
       if (onBegin) onBegin();
+    }
+
+    function startSessionForEveryone(){
+      return fetch('/api/venue-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venue: venue, action: 'start' })
+      }).then(function(r){ return r.json(); });
+    }
+
+    // Waiting room: poll for the shared start signal (from this device or
+    // any other) and the live join count.
+    function pollForStart(onJoinCount){
+      var timer = setInterval(function(){
+        if (!venue || !participantCode) return; // prepare() hasn't set these yet (slow manifest fetch) — skip this tick
+        fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&code=' + encodeURIComponent(participantCode))
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (onJoinCount) onJoinCount(data.joined, data.groupSize);
+            if (data.startedAt){
+              clearInterval(timer);
+              beginPlayback(data.startedAt, data.fillerSchedule);
+            }
+          })
+          .catch(function(){});
+      }, 3000);
+      return function(){ clearInterval(timer); };
+    }
+
+    // During the experience: a slow, low-stakes heartbeat that only exists
+    // to pick up an operator's rare "force resync" request.
+    function pollDuringExperience(){
+      setInterval(function(){
+        fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&code=' + encodeURIComponent(participantCode))
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if (data.forceResyncAt && data.forceResyncAt !== lastHandledResync){
+              lastHandledResync = data.forceResyncAt;
+              if (audioCtx.state === 'suspended') audioCtx.resume();
+              tick();
+            }
+          })
+          .catch(function(){});
+      }, 10000);
     }
 
     function toggleMute(){
       muted = !muted;
       var t = audioCtx.currentTime;
-      ['ambience','whisper','texture'].forEach(function(k){
-        var def = k === 'whisper' ? 0.9 : (k === 'texture' ? 0.3 : 0.42);
-        gains[k].gain.setTargetAtTime(muted ? 0 : def, t, 0.05);
-      });
-      gains.mood.gain.setTargetAtTime(muted ? 0 : 0.32, t, 0.05);
+      gains.voice.gain.setTargetAtTime(muted ? 0 : 0.95, t, 0.05);
+      gains.background.gain.setTargetAtTime(muted ? 0 : 0.55, t, 0.05);
       return muted;
     }
 
     return {
       unlock: unlock,
       prepare: prepare,
+      startSessionForEveryone: startSessionForEveryone,
+      pollForStart: pollForStart,
+      pollDuringExperience: pollDuringExperience,
       toggleMute: toggleMute,
-      onBegin: function(fn){ onBegin = fn; }
+      onBegin: function(fn){ onBegin = fn; },
+      onEnd: function(fn){ onEnd = fn; }
     };
   })();
 
@@ -897,68 +939,97 @@
   var playerBox = document.getElementById('playerBox');
   var muteBtn = document.getElementById('muteBtn');
   var pidValue = document.getElementById('pidValue');
+  var joinCount = document.getElementById('joinCount');
+  var startBtn = document.getElementById('startBtn');
   var listeningText = document.getElementById('listeningText');
 
-  Engine.onBegin(function(){ listeningText.textContent = 'Listening…'; });
+  Engine.onBegin(function(){
+    showPlayer();
+    listeningText.textContent = 'Listening…';
+    Engine.pollDuringExperience();
+  });
+  Engine.onEnd(function(){
+    listeningText.textContent = 'The experience has ended. Thank you.';
+  });
+
+  function showWaitingRoom(participantCode){
+    pidValue.textContent = participantCode;
+    form.style.opacity = '0';
+    form.style.transform = 'translateY(-10px)';
+    setTimeout(function(){
+      form.style.display = 'none';
+      confirmBox.classList.add('show');
+    }, 400);
+  }
+
+  function showPlayer(){
+    confirmBox.classList.remove('show');
+    setTimeout(function(){
+      confirmBox.style.display = 'none';
+      playerBox.classList.add('show');
+    }, 500);
+  }
+
+  function showError(){
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Join';
+    submitBtn.classList.add('shake');
+    setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
+  }
 
   form.addEventListener('submit', function(e){
     e.preventDefault();
 
     var firstName = document.getElementById('firstName').value.trim();
     var lastName = document.getElementById('lastName').value.trim();
-    var venue = document.getElementById('venue').value;
-    if (!firstName || !lastName || !venue) return;
+    if (!firstName || !lastName) return;
 
-    // Unlock audio synchronously, in direct response to this tap — before any
-    // network/async work — so mobile browsers allow playback later.
+    // Unlock audio + request the wake lock synchronously, in direct
+    // response to this tap — before any network/async work — so mobile
+    // browsers allow playback (and screen-lock prevention) later.
     Engine.unlock();
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Connecting…';
 
-    function showConfirm(participantCode){
-      pidValue.textContent = participantCode;
-      form.style.opacity = '0';
-      form.style.transform = 'translateY(-10px)';
-      setTimeout(function(){
-        form.style.display = 'none';
-        confirmBox.classList.add('show');
-      }, 400);
-    }
-
-    function showPlayer(){
-      setTimeout(function(){
-        confirmBox.classList.remove('show');
-        setTimeout(function(){
-          confirmBox.style.display = 'none';
-          playerBox.classList.add('show');
-        }, 500);
-      }, 2200);
-    }
-
-    function showError(){
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Begin';
-      submitBtn.classList.add('shake');
-      setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
-    }
-
     fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: firstName, lastName: lastName, venue: venue })
+      body: JSON.stringify({ firstName: firstName, lastName: lastName })
     })
       .then(function(r){ if (!r.ok) throw new Error('registration failed'); return r.json(); })
-      // The role is used only to fetch this participant's own audio — the UI
-      // never displays it, so the role itself stays hidden from them.
+      // The role is used only to fetch this participant's own audio — the
+      // UI never displays it, so it stays secret until command 10 speaks it.
       .then(function(data){
-        showConfirm(data.participantCode);
-        showPlayer();
+        showWaitingRoom(data.participantCode);
+
+        // Join-count polling and audio preloading run in parallel — no
+        // reason to make people wait to see who else has joined just
+        // because their own device is still decoding files.
+        Engine.pollForStart(function(joined, groupSize){
+          joinCount.textContent = joined + (groupSize ? ' / ' + groupSize : '') + ' joined';
+        });
+
+        startBtn.disabled = true;
+        startBtn.textContent = 'Preparing…';
         return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
           .then(function(r){ return r.json(); })
-          .then(function(manifest){ return Engine.prepare(manifest, data.venue, data.role, data.participantCode); });
+          .then(function(manifest){ return Engine.prepare(manifest, data.venue, data.role, data.participantCode); })
+          .then(function(){
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start for Everyone';
+          });
       })
       .catch(function(){ showError(); });
+  });
+
+  startBtn.addEventListener('click', function(){
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting…';
+    Engine.startSessionForEveryone().catch(function(){
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start for Everyone';
+    });
   });
 
   muteBtn.addEventListener('click', function(){

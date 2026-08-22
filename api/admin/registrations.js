@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const { ensureSchema, deleteRegistration, updateRegistrationRole } = require('../../lib/db');
+const { ensureSchema, deleteRegistration } = require('../../lib/db');
 
 const connectionString =
   process.env.POSTGRES_URL ||
@@ -41,17 +41,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      const { action, participantCode, role } = req.body || {};
-
-      if (action === 'updateRole') {
-        if (!participantCode || !role || !String(role).trim()) {
-          res.status(400).json({ error: 'participantCode and role are required' });
-          return;
-        }
-        const bumped = await updateRegistrationRole(participantCode, String(role).trim());
-        res.status(200).json({ ok: true, bumped });
-        return;
-      }
+      const { action, participantCode } = req.body || {};
 
       if (action === 'delete') {
         if (!participantCode) {

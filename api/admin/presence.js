@@ -1,6 +1,6 @@
 const { ensureSchema, listPresence } = require('../../lib/db');
 
-const ACTIVE_WINDOW_MS = 12000; // ~3x the client poll interval
+const ACTIVE_WINDOW_MS = 25000; // ~2.5x the client's 10s in-experience report interval
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -31,7 +31,10 @@ module.exports = async (req, res) => {
       role: r.role,
       active: (now - new Date(r.last_seen_at).getTime()) < ACTIVE_WINDOW_MS,
       lastSeenAt: r.last_seen_at,
-      createdAt: r.created_at
+      createdAt: r.created_at,
+      currentClip: r.current_clip,
+      currentClipAt: r.current_clip_at,
+      forceResyncAt: r.force_resync_at
     }));
     res.status(200).json({ people });
   } catch (err) {
