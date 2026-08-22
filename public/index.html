@@ -713,19 +713,45 @@
       }
     });
 
+    var BASE_BG_GAIN = 0.7;    // background bed level at rest — kept present, not buried
+    var DUCK_BG_GAIN = 0.48;   // background level while a voice clip is speaking
+    var BASE_VOICE_GAIN = 0.55; // commands sit clearly above the bed without overpowering it
+    var CLIP_FADE = 0.06;      // seconds — soft in/out on every spoken clip, avoids clicks
+
     // Must be called synchronously inside a real user-gesture handler.
     function unlock(){
       if (audioCtx) return;
       var Ctx = window.AudioContext || window.webkitAudioContext;
       audioCtx = new Ctx();
-      gains.background = audioCtx.createGain();
+      gains.master = audioCtx.createGain();       // sole owner of mute, so it never collides with anything else's automation
+      gains.background = audioCtx.createGain();   // owns only the 19:00-20:00 fade-out
+      gains.duck = audioCtx.createGain();         // dips under spoken clips, independent of the fade
       gains.voice = audioCtx.createGain();
-      gains.background.gain.value = 0.55;
-      gains.voice.gain.value = 0.95;
-      gains.background.connect(audioCtx.destination);
-      gains.voice.connect(audioCtx.destination);
+      gains.master.gain.value = 1;
+      gains.background.gain.value = BASE_BG_GAIN;
+      gains.duck.gain.value = 1;
+      gains.voice.gain.value = BASE_VOICE_GAIN;
+      gains.duck.connect(gains.background);
+      gains.background.connect(gains.master);
+      gains.voice.connect(gains.master);
+      gains.master.connect(audioCtx.destination);
       if (audioCtx.state === 'suspended') audioCtx.resume();
       requestWakeLock();
+    }
+
+    // Dips the background bed while a spoken clip plays, then brings it back
+    // — kept on a separate gain node from gains.background so it can never
+    // collide with that node's one-time 19:00-20:00 fade-out automation.
+    function duckBackgroundFor(durationSec){
+      if (muted) return;
+      var t = audioCtx.currentTime;
+      var holdUntil = t + Math.max(CLIP_FADE, durationSec - 0.35);
+      var backUntil = t + durationSec + 0.35;
+      gains.duck.gain.cancelScheduledValues(t);
+      gains.duck.gain.setValueAtTime(gains.duck.gain.value, t);
+      gains.duck.gain.linearRampToValueAtTime(DUCK_BG_GAIN / BASE_BG_GAIN, t + CLIP_FADE);
+      gains.duck.gain.setValueAtTime(DUCK_BG_GAIN / BASE_BG_GAIN, holdUntil);
+      gains.duck.gain.linearRampToValueAtTime(1, backUntil);
     }
 
     function loadBuffer(url){
@@ -737,13 +763,28 @@
         .then(function(buf){ bufferCache[url] = buf; return buf; });
     }
 
+    // Soft in/out envelope on every spoken clip (avoids clicks against the
+    // bed) and a matching dip in the background while it speaks, so a
+    // command reads clearly without just slamming in on top of everything.
     function playOneShot(url){
       var buf = bufferCache[url];
       if (!buf) return;
+
+      var t = audioCtx.currentTime;
+      var clipGain = audioCtx.createGain();
+      clipGain.gain.setValueAtTime(0, t);
+      clipGain.gain.linearRampToValueAtTime(1, t + CLIP_FADE);
+      var holdUntil = t + Math.max(CLIP_FADE, buf.duration - CLIP_FADE);
+      clipGain.gain.setValueAtTime(1, holdUntil);
+      clipGain.gain.linearRampToValueAtTime(0, t + buf.duration);
+      clipGain.connect(gains.voice);
+
       var src = audioCtx.createBufferSource();
       src.buffer = buf;
-      src.connect(gains.voice);
+      src.connect(clipGain);
       src.start();
+
+      duckBackgroundFor(buf.duration);
       return src;
     }
 
@@ -779,7 +820,7 @@
       var offset = Math.max(0, Math.min(elapsedSec, buf.duration - 0.05));
       var src = audioCtx.createBufferSource();
       src.buffer = buf;
-      src.connect(gains.background);
+      src.connect(gains.duck);
       var ctxNow = audioCtx.currentTime;
       src.start(ctxNow, offset);
 
@@ -788,7 +829,7 @@
       if (fadeEndIn > 0){
         var atStart = ctxNow + Math.max(0, fadeStartIn);
         var atEnd = ctxNow + Math.max(0.1, fadeEndIn);
-        gains.background.gain.setValueAtTime(muted ? 0 : 0.55, atStart);
+        gains.background.gain.setValueAtTime(BASE_BG_GAIN, atStart);
         gains.background.gain.linearRampToValueAtTime(0, atEnd);
       }
     }
@@ -914,9 +955,7 @@
 
     function toggleMute(){
       muted = !muted;
-      var t = audioCtx.currentTime;
-      gains.voice.gain.setTargetAtTime(muted ? 0 : 0.95, t, 0.05);
-      gains.background.gain.setTargetAtTime(muted ? 0 : 0.55, t, 0.05);
+      gains.master.gain.setTargetAtTime(muted ? 0 : 1, audioCtx.currentTime, 0.05);
       return muted;
     }
 
