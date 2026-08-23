@@ -155,43 +155,63 @@
 
   /* ---------- Mirrored playback schedule (must match public/index.html) ---------- */
   var SHARED_SEQUENCE = [
-    { t: 0.00, key: 'intro' }, { t: 42.94, key: 'cmd1' }, { t: 64.70, key: 'cmd2' },
-    { t: 94.87, key: 'cmd3a' }, { t: 106.57, key: 'cmd3b' }, { t: 118.42, key: 'cmd3c' },
-    { t: 138.79, key: 'cmd4' }, { t: 159.45, key: 'cmd5a' }, { t: 174.91, key: 'cmd5b' },
-    { t: 186.06, key: 'cmd5c' }, { t: 197.91, key: 'cmd5d' }, { t: 216.66, key: 'cmd6a' },
-    { t: 230.84, key: 'cmd6b' }, { t: 253.96, key: 'cmd7' }, { t: 276.71, key: 'cmd8a' },
-    { t: 298.73, key: 'cmd8b' }, { t: 337.91, key: 'cmd9a' }, { t: 351.51, key: 'cmd9b' }
+    { t: 0.00, key: 'intro' },
+    { t: 45.47, key: 'cmd1' }, { t: 66.74, key: 'cmd2' }, { t: 88.70, key: 'cmd3' },
+    { t: 110.05, key: 'cmd4' }, { t: 131.46, key: 'cmd5' }, { t: 152.92, key: 'cmd6' },
+    { t: 174.39, key: 'cmd7' }, { t: 201.28, key: 'cmd8' }, { t: 223.16, key: 'cmd9' },
+    { t: 245.03, key: 'cmd10' }, { t: 267.57, key: 'cmd11' }, { t: 288.61, key: 'cmd12' },
+    { t: 310.73, key: 'cmd13' }, { t: 335.61, key: 'cmd14' }, { t: 356.66, key: 'cmd15' },
+    { t: 378.48, key: 'cmd16' }, { t: 399.42, key: 'cmd17' }, { t: 421.35, key: 'cmd18' },
+    { t: 443.42, key: 'cmd19' }, { t: 464.69, key: 'cmd20' }, { t: 488.09, key: 'cmd21' },
+    { t: 510.46, key: 'cmd23' }, { t: 531.56, key: 'cmd25' }, { t: 556.18, key: 'cmd27' },
+    { t: 577.96, key: 'cmd28' }, { t: 611.67, key: 'cmd29' }, { t: 634.86, key: 'cmd31' },
+    { t: 657.41, key: 'cmd32' }
   ];
+  var ROLE_REVEAL_TIME = 660.00;
   var ROLE_SCHEDULES = {
     'housekeeper': [
-      { t: 360.00, key: 'cmd10' }, { t: 450.00, key: 'cmd11' }, { t: 621.88, key: 'cmd12' },
-      { t: 789.03, key: 'cmd13' }, { t: 955.16, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' }, { t: 776.52, key: 'FILLER' },
+      { t: 817.91, key: 'w35a' }, { t: 824.91, key: 'w35b' }, { t: 831.91, key: 'w35c' }, { t: 878.25, key: 'FILLER' },
+      { t: 919.64, key: 'w36a' }, { t: 926.64, key: 'w36b' }, { t: 972.35, key: 'FILLER' },
+      { t: 1013.74, key: 'w37a' }, { t: 1020.74, key: 'w37b' }, { t: 1027.74, key: 'w37c' }, { t: 1073.27, key: 'FILLER' }
     ],
     'food-provider': [
-      { t: 360.00, key: 'cmd10' }, { t: 450.00, key: 'cmd11' }, { t: 616.77, key: 'cmd12' },
-      { t: 788.74, key: 'cmd13' }, { t: 954.80, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' }, { t: 773.25, key: 'FILLER' },
+      { t: 815.90, key: 'w35a' }, { t: 822.90, key: 'w35b' }, { t: 829.90, key: 'w35c' }, { t: 881.10, key: 'FILLER' },
+      { t: 923.75, key: 'w36a' }, { t: 930.75, key: 'w36b' }, { t: 976.26, key: 'FILLER' },
+      { t: 1018.90, key: 'w37a' }, { t: 1025.90, key: 'w37b' }, { t: 1072.01, key: 'FILLER' }
     ],
     'maker': [
-      { t: 360.00, key: 'cmd10' }, { t: 450.00, key: 'cmd11' }, { t: 617.19, key: 'cmd12' },
-      { t: 783.12, key: 'cmd13' }, { t: 953.88, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' }, { t: 772.67, key: 'FILLER' },
+      { t: 814.38, key: 'w35a' }, { t: 821.38, key: 'w35b' }, { t: 866.12, key: 'FILLER' },
+      { t: 907.82, key: 'w36a' }, { t: 914.82, key: 'w36b' }, { t: 921.82, key: 'w36c' }, { t: 928.82, key: 'w36d' }, { t: 978.52, key: 'FILLER' },
+      { t: 1020.22, key: 'w37a' }, { t: 1027.22, key: 'w37b' }, { t: 1072.96, key: 'FILLER' }
     ],
     'memory-keeper': [
-      { t: 360.00, key: 'cmd10' }, { t: 450.00, key: 'cmd11' }, { t: 617.94, key: 'cmd12' },
-      { t: 784.92, key: 'cmd13' }, { t: 952.68, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' }, { t: 775.84, key: 'FILLER' },
+      { t: 820.38, key: 'w35a' }, { t: 868.59, key: 'FILLER' },
+      { t: 913.14, key: 'w36a' }, { t: 920.14, key: 'w36b' }, { t: 969.21, key: 'FILLER' },
+      { t: 1013.75, key: 'w37a' }, { t: 1020.75, key: 'w37b' }, { t: 1070.11, key: 'FILLER' }
     ]
   };
-  var RETREAT_SEQUENCE = [ { t: 1121.40, key: 'cmd15' }, { t: 1185.00, key: 'cmd17' } ];
+  var RETREAT_SEQUENCE = [
+    { t: 1114.65, key: '38A' }, { t: 1118.56, key: '38B' }, { t: 1122.60, key: '38C' }, { t: 1185.00, key: 'r40' }
+  ];
   var EXPERIENCE_END = 1200;
 
   function scheduleForRole(role){
-    return SHARED_SEQUENCE.concat(ROLE_SCHEDULES[role] || []).concat(RETREAT_SEQUENCE)
+    return [{ t: ROLE_REVEAL_TIME, key: 'role33' }]
+      .concat(SHARED_SEQUENCE, ROLE_SCHEDULES[role] || [], RETREAT_SEQUENCE)
       .slice().sort(function(a, b){ return a.t - b.t; });
   }
 
+  // FILLER entries never get reported by the client (their content is
+  // resolved and randomized client-side), so they're not a meaningful
+  // "expected" position — skip them when finding what should be current.
   function expectedKeyAt(role, elapsed){
     var sched = scheduleForRole(role);
     var last = null;
-    sched.forEach(function(entry){ if (entry.t <= elapsed) last = entry.key; });
+    sched.forEach(function(entry){ if (entry.t <= elapsed && entry.key !== 'FILLER') last = entry.key; });
     return last;
   }
 

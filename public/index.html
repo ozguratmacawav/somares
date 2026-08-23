@@ -596,67 +596,87 @@
   requestAnimationFrame(loop);
 
   /* ---------- Playback schedule ---------- */
-  // Absolute seconds since the shared synchronized start. Commands 1-9 are
-  // identical for every role and land exactly on 6:00; command 10 (role
-  // reveal) and the retreat (15/17) are fixed, shared moments too. Only
-  // 11-14 (the asymmetric role work) differ in content AND in timing across
-  // the four roles — but all four still arrive at the 18:41 retreat cue
-  // together, whatever point they've each reached.
+  // Absolute seconds since the shared synchronized start.
+  // 0:00-11:00  — intro + the 32 shared commands (22/24/26/30 not yet
+  //               recorded, silently skipped), identical for every role.
+  // 11:00       — role reveal (role-specific audio, same fixed moment).
+  // 11:00-12:00 — a minute of silence to take the role in.
+  // 12:00-18:34.65 — asymmetric role work. Different content AND timing
+  //               per role, but every role still arrives at 18:34.65
+  //               together. Sub-lettered parts of the same numbered
+  //               command play in quick succession (~7s apart — they're
+  //               one continuous thought); the long gaps between different
+  //               numbers (~83-89s, always over the 1-minute cap) each get
+  //               exactly one filler roughly at the midpoint, randomly
+  //               either a shared clip or this role's own filler.
+  // 18:34.65-20:00 — retreat, shared for everyone, ending exactly at 20:00
+  //               together with the background's own fade-out.
   var SHARED_SEQUENCE = [
     { t: 0.00, key: 'intro' },
-    { t: 42.94, key: 'cmd1' },
-    { t: 64.70, key: 'cmd2' },
-    { t: 94.87, key: 'cmd3a' },
-    { t: 106.57, key: 'cmd3b' },
-    { t: 118.42, key: 'cmd3c' },
-    { t: 138.79, key: 'cmd4' },
-    { t: 159.45, key: 'cmd5a' },
-    { t: 174.91, key: 'cmd5b' },
-    { t: 186.06, key: 'cmd5c' },
-    { t: 197.91, key: 'cmd5d' },
-    { t: 216.66, key: 'cmd6a' },
-    { t: 230.84, key: 'cmd6b' },
-    { t: 253.96, key: 'cmd7' },
-    { t: 276.71, key: 'cmd8a' },
-    { t: 298.73, key: 'cmd8b' },
-    { t: 337.91, key: 'cmd9a' },
-    { t: 351.51, key: 'cmd9b' }
+    { t: 45.47, key: 'cmd1' }, { t: 66.74, key: 'cmd2' }, { t: 88.70, key: 'cmd3' },
+    { t: 110.05, key: 'cmd4' }, { t: 131.46, key: 'cmd5' }, { t: 152.92, key: 'cmd6' },
+    { t: 174.39, key: 'cmd7' }, { t: 201.28, key: 'cmd8' }, { t: 223.16, key: 'cmd9' },
+    { t: 245.03, key: 'cmd10' }, { t: 267.57, key: 'cmd11' }, { t: 288.61, key: 'cmd12' },
+    { t: 310.73, key: 'cmd13' }, { t: 335.61, key: 'cmd14' }, { t: 356.66, key: 'cmd15' },
+    { t: 378.48, key: 'cmd16' }, { t: 399.42, key: 'cmd17' }, { t: 421.35, key: 'cmd18' },
+    { t: 443.42, key: 'cmd19' }, { t: 464.69, key: 'cmd20' }, { t: 488.09, key: 'cmd21' },
+    { t: 510.46, key: 'cmd23' }, { t: 531.56, key: 'cmd25' }, { t: 556.18, key: 'cmd27' },
+    { t: 577.96, key: 'cmd28' }, { t: 611.67, key: 'cmd29' }, { t: 634.86, key: 'cmd31' },
+    { t: 657.41, key: 'cmd32' }
   ];
 
+  var ROLE_REVEAL_TIME = 660.00; // 11:00 — same fixed moment for everyone, role-specific audio
+
+  // FILLER entries are resolved at playback time: a coin flip between the
+  // 5-clip shared pool and this role's own single filler clip.
   var ROLE_SCHEDULES = {
     'housekeeper': [
-      { t: 360.00, key: 'cmd10' },
-      { t: 450.00, key: 'cmd11' },
-      { t: 621.88, key: 'cmd12' },
-      { t: 789.03, key: 'cmd13' },
-      { t: 955.16, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 776.52, key: 'FILLER' },
+      { t: 817.91, key: 'w35a' }, { t: 824.91, key: 'w35b' }, { t: 831.91, key: 'w35c' },
+      { t: 878.25, key: 'FILLER' },
+      { t: 919.64, key: 'w36a' }, { t: 926.64, key: 'w36b' },
+      { t: 972.35, key: 'FILLER' },
+      { t: 1013.74, key: 'w37a' }, { t: 1020.74, key: 'w37b' }, { t: 1027.74, key: 'w37c' },
+      { t: 1073.27, key: 'FILLER' }
     ],
     'food-provider': [
-      { t: 360.00, key: 'cmd10' },
-      { t: 450.00, key: 'cmd11' },
-      { t: 616.77, key: 'cmd12' },
-      { t: 788.74, key: 'cmd13' },
-      { t: 954.80, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 773.25, key: 'FILLER' },
+      { t: 815.90, key: 'w35a' }, { t: 822.90, key: 'w35b' }, { t: 829.90, key: 'w35c' },
+      { t: 881.10, key: 'FILLER' },
+      { t: 923.75, key: 'w36a' }, { t: 930.75, key: 'w36b' },
+      { t: 976.26, key: 'FILLER' },
+      { t: 1018.90, key: 'w37a' }, { t: 1025.90, key: 'w37b' },
+      { t: 1072.01, key: 'FILLER' }
     ],
     'maker': [
-      { t: 360.00, key: 'cmd10' },
-      { t: 450.00, key: 'cmd11' },
-      { t: 617.19, key: 'cmd12' },
-      { t: 783.12, key: 'cmd13' },
-      { t: 953.88, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 772.67, key: 'FILLER' },
+      { t: 814.38, key: 'w35a' }, { t: 821.38, key: 'w35b' },
+      { t: 866.12, key: 'FILLER' },
+      { t: 907.82, key: 'w36a' }, { t: 914.82, key: 'w36b' }, { t: 921.82, key: 'w36c' }, { t: 928.82, key: 'w36d' },
+      { t: 978.52, key: 'FILLER' },
+      { t: 1020.22, key: 'w37a' }, { t: 1027.22, key: 'w37b' },
+      { t: 1072.96, key: 'FILLER' }
     ],
     'memory-keeper': [
-      { t: 360.00, key: 'cmd10' },
-      { t: 450.00, key: 'cmd11' },
-      { t: 617.94, key: 'cmd12' },
-      { t: 784.92, key: 'cmd13' },
-      { t: 952.68, key: 'cmd14' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 775.84, key: 'FILLER' },
+      { t: 820.38, key: 'w35a' },
+      { t: 868.59, key: 'FILLER' },
+      { t: 913.14, key: 'w36a' }, { t: 920.14, key: 'w36b' },
+      { t: 969.21, key: 'FILLER' },
+      { t: 1013.75, key: 'w37a' }, { t: 1020.75, key: 'w37b' },
+      { t: 1070.11, key: 'FILLER' }
     ]
   };
 
   var RETREAT_SEQUENCE = [
-    { t: 1121.40, key: 'cmd15' },
-    { t: 1185.00, key: 'cmd17' }
+    { t: 1114.65, key: '38A' },
+    { t: 1118.56, key: '38B' },
+    { t: 1122.60, key: '38C' },
+    { t: 1185.00, key: 'r40' }
   ];
 
   var FADEOUT_START = 1140;   // 19:00 — background starts fading
@@ -664,7 +684,8 @@
   var LATE_SKIP_THRESHOLD = 20; // seconds late before we skip a stale cue instead of playing it
 
   function scheduleForRole(role){
-    return SHARED_SEQUENCE.concat(ROLE_SCHEDULES[role] || []).concat(RETREAT_SEQUENCE)
+    return [{ t: ROLE_REVEAL_TIME, key: 'role33' }]
+      .concat(SHARED_SEQUENCE, ROLE_SCHEDULES[role] || [], RETREAT_SEQUENCE)
       .slice()
       .sort(function(a, b){ return a.t - b.t; });
   }
@@ -683,9 +704,7 @@
     var venue = null, role = null, participantCode = null;
     var manifest = null;
     var schedule = [];
-    var playedKeys = {};
-    var fillerSchedule = [];
-    var playedFillers = {};
+    var playedIndex = []; // parallel to `schedule`, by position (not by key — FILLER repeats)
     var startedAtMs = null;
     var started = false;
     var tickTimer = null;
@@ -849,30 +868,35 @@
     var HEARTBEAT_MS = 10000;
     var lastReportAt = 0;
 
+    // A FILLER slot is a coin flip between the 5-clip shared pool and this
+    // role's own single "you are still the [role]" clip — resolved fresh
+    // each time it's actually reached, not pre-decided.
+    function resolveFillerUrl(){
+      var pool = manifest.filler || [];
+      var n = pool.length;
+      var roll = Math.floor(Math.random() * (n + 1)); // 0..n-1 = shared pool, n = role-specific
+      if (roll < n) return pool[roll].url;
+      return (manifest.own && manifest.own.fillerRole) || (pool[0] && pool[0].url) || null;
+    }
+
     function tick(){
       if (!started || ended) return;
       var elapsed = (Date.now() - startedAtMs) / 1000;
       var firedNew = false;
 
-      schedule.forEach(function(entry){
-        if (playedKeys[entry.key]) return;
+      schedule.forEach(function(entry, i){
+        if (playedIndex[i]) return;
         if (elapsed < entry.t) return;
-        playedKeys[entry.key] = true;
+        playedIndex[i] = true;
         if (elapsed - entry.t <= LATE_SKIP_THRESHOLD){
-          playOneShot(urlForKey(entry.key));
-          reportProgress(entry.key);
+          if (entry.key === 'FILLER'){
+            playOneShot(resolveFillerUrl());
+          } else {
+            playOneShot(urlForKey(entry.key));
+            reportProgress(entry.key);
+          }
           lastReportAt = Date.now();
           firedNew = true;
-        }
-      });
-
-      fillerSchedule.forEach(function(f, i){
-        if (playedFillers[i]) return;
-        if (elapsed < f.t) return;
-        playedFillers[i] = true;
-        if (elapsed - f.t <= LATE_SKIP_THRESHOLD){
-          var item = (manifest.filler || [])[f.clip];
-          if (item) playOneShot(item.url);
         }
       });
 
@@ -888,17 +912,17 @@
 
     function playedKeysLastLabel(){
       var last = null, lastT = -1;
-      schedule.forEach(function(entry){
-        if (playedKeys[entry.key] && entry.t > lastT){ last = entry.key; lastT = entry.t; }
+      schedule.forEach(function(entry, i){
+        if (playedIndex[i] && entry.key !== 'FILLER' && entry.t > lastT){ last = entry.key; lastT = entry.t; }
       });
       return last;
     }
 
-    function beginPlayback(startedAtIso, fillerScheduleData){
+    function beginPlayback(startedAtIso){
       if (started) return;
       started = true;
       startedAtMs = new Date(startedAtIso).getTime();
-      fillerSchedule = fillerScheduleData || [];
+      playedIndex = new Array(schedule.length);
 
       var elapsed = (Date.now() - startedAtMs) / 1000;
       startBackground(elapsed);
@@ -928,7 +952,7 @@
             if (onJoinCount) onJoinCount(data.joined, data.groupSize);
             if (data.startedAt){
               clearInterval(timer);
-              beginPlayback(data.startedAt, data.fillerSchedule);
+              beginPlayback(data.startedAt);
             }
           })
           .catch(function(){});
