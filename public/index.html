@@ -219,6 +219,20 @@
     75%{ transform:translateX(6px); }
   }
 
+  .form-message{
+    display:none;
+    margin-top:14px;
+    padding:12px 14px;
+    border-radius:10px;
+    background:rgba(212,162,86,0.1);
+    border:1px solid rgba(212,162,86,0.3);
+    color:#e8d9c0;
+    font-size:13.5px;
+    line-height:1.5;
+    text-align:center;
+  }
+  .form-message.show{ display:block; }
+
   .confirm{
     display:none;
     width:100%;
@@ -390,6 +404,7 @@
       <input type="text" id="lastName" placeholder="Last Name" autocomplete="family-name" required>
     </div>
     <button type="submit" class="submit" id="submitBtn">Join</button>
+    <p class="form-message" id="formMessage"></p>
   </form>
 
   <div class="confirm" id="confirmBox">
@@ -1001,6 +1016,7 @@
   /* ---------- Registration form ---------- */
   var form = document.getElementById('registerForm');
   var submitBtn = document.getElementById('submitBtn');
+  var formMessage = document.getElementById('formMessage');
   var confirmBox = document.getElementById('confirmBox');
   var playerBox = document.getElementById('playerBox');
   var muteBtn = document.getElementById('muteBtn');
@@ -1043,6 +1059,16 @@
     setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
   }
 
+  // Registration is permanently closed (already started, or the group's
+  // 4 slots are full) until an operator resets the session, so (unlike
+  // showError) this disables the form instead of inviting a retry.
+  function showFormBlocked(buttonText, message){
+    submitBtn.disabled = true;
+    submitBtn.textContent = buttonText;
+    formMessage.textContent = message;
+    formMessage.classList.add('show');
+  }
+
   form.addEventListener('submit', function(e){
     e.preventDefault();
 
@@ -1063,7 +1089,11 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ firstName: firstName, lastName: lastName })
     })
-      .then(function(r){ if (!r.ok) throw new Error('registration failed'); return r.json(); })
+      .then(function(r){
+        if (r.status === 409) { return r.json().then(function(body){ throw { blocked: true, reason: body.error }; }); }
+        if (!r.ok) throw new Error('registration failed');
+        return r.json();
+      })
       // The role is used only to fetch this participant's own audio — the
       // UI never displays it, so it stays secret until command 10 speaks it.
       .then(function(data){
@@ -1086,7 +1116,15 @@
             startBtn.textContent = 'Start for Everyone';
           });
       })
-      .catch(function(){ showError(); });
+      .catch(function(err){
+        if (err && err.blocked && err.reason === 'already-started') {
+          showFormBlocked('Already started', 'The experience has already started for this group. Please check with the person running the session.');
+        } else if (err && err.blocked && err.reason === 'group-full') {
+          showFormBlocked('Group is full', 'This group already has all 4 participants. Please check with the person running the session.');
+        } else {
+          showError();
+        }
+      });
   });
 
   startBtn.addEventListener('click', function(){

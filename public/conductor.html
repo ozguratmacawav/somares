@@ -292,12 +292,12 @@
   var startedAtMs = null;
 
   resetBtn.addEventListener('click', function(){
-    if (!confirm('Reset the session? Everyone\'s clock and progress will clear.')) return;
+    if (!confirm('Reset the session? This clears the shared clock AND un-registers everyone — all 4 roles become free again, and anyone who wants back in has to rejoin from the start.')) return;
     api('/api/admin/experience', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ venue: VENUE, action: 'reset' })
-    }).then(function(){ showToast('Session reset'); }).catch(function(){ showToast('Failed to reset'); });
+    }).then(function(){ showToast('Session reset — everyone un-registered'); refreshAll(); }).catch(function(){ showToast('Failed to reset'); });
   });
 
   function renderClock(){

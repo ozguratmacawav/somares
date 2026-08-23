@@ -1,5 +1,5 @@
-const { ensureSchema, nextVenueCount, insertRegistration } = require('../lib/db');
-const { assignRole } = require('../lib/roles');
+const { ensureSchema, getVenueState, countAllRegistrations, nextVenueCount, insertRegistration } = require('../lib/db');
+const { assignRole, GROUP_SIZE } = require('../lib/roles');
 
 const VENUE = 'catalhoyuk-home';
 
@@ -22,6 +22,18 @@ module.exports = async (req, res) => {
 
   try {
     await ensureSchema();
+
+    const venueState = await getVenueState(VENUE);
+    if (venueState.startedAt) {
+      res.status(409).json({ error: 'already-started', message: 'The experience has already started for this group.' });
+      return;
+    }
+
+    const existing = await countAllRegistrations(VENUE);
+    if (existing >= GROUP_SIZE) {
+      res.status(409).json({ error: 'group-full', message: 'This group is already full (4/4).' });
+      return;
+    }
 
     const count = await nextVenueCount(VENUE);          // 1-indexed
     const { role, groupIndex, positionInGroup } = assignRole(VENUE, count - 1);
