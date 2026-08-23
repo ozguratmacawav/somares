@@ -597,78 +597,81 @@
 
   /* ---------- Playback schedule ---------- */
   // Absolute seconds since the shared synchronized start.
-  // 0:00-12:25.87 — intro + all 32 shared commands, identical for everyone.
-  // 12:25.87    — role reveal (role-specific audio, same fixed moment).
-  // 12:25.87-13:25.87 — a minute of silence to take the role in.
-  // 13:25.87-18:34.65 — asymmetric role work. Different content AND timing
+  // 0:00-11:00  — intro + all 32 shared commands, identical for everyone.
+  //               The inter-command pause is compressed to ~17.3s (down
+  //               from the original 20s) specifically so all 32 real
+  //               clips still land the block on the fixed 11:00 mark.
+  // 11:00       — role reveal (role-specific audio, same fixed moment).
+  // 11:00-12:00 — a minute of silence to take the role in.
+  // 12:00-18:34.65 — asymmetric role work. Different content AND timing
   //               per role, but every role still arrives at 18:34.65
   //               together. Sub-lettered parts of the same numbered
-  //               command play in quick succession (7s apart — they're
-  //               one continuous thought); the gaps between different
-  //               numbers (~65-72s, always over the 1-minute cap) each get
-  //               exactly one filler roughly at the same midpoint fraction,
-  //               randomly either a shared clip or this role's own filler.
+  //               command play in quick succession (~7s apart — they're
+  //               one continuous thought); the long gaps between different
+  //               numbers (~83-89s, always over the 1-minute cap) each get
+  //               exactly one filler roughly at the midpoint, randomly
+  //               either a shared clip or this role's own filler.
   // 18:34.65-20:00 — retreat, shared for everyone, ending exactly at 20:00
   //               together with the background's own fade-out.
   var SHARED_SEQUENCE = [
     { t: 0.00, key: 'intro' },
-    { t: 45.44, key: 'cmd1' }, { t: 66.70, key: 'cmd2' }, { t: 88.63, key: 'cmd3' },
-    { t: 109.96, key: 'cmd4' }, { t: 131.35, key: 'cmd5' }, { t: 152.78, key: 'cmd6' },
-    { t: 174.22, key: 'cmd7' }, { t: 201.09, key: 'cmd8' }, { t: 222.95, key: 'cmd9' },
-    { t: 244.80, key: 'cmd10' }, { t: 267.31, key: 'cmd11' }, { t: 288.33, key: 'cmd12' },
-    { t: 310.42, key: 'cmd13' }, { t: 335.28, key: 'cmd14' }, { t: 356.29, key: 'cmd15' },
-    { t: 378.10, key: 'cmd16' }, { t: 399.01, key: 'cmd17' }, { t: 420.92, key: 'cmd18' },
-    { t: 442.96, key: 'cmd19' }, { t: 464.21, key: 'cmd20' }, { t: 487.58, key: 'cmd21' },
-    { t: 509.93, key: 'cmd22' }, { t: 532.39, key: 'cmd23' }, { t: 553.46, key: 'cmd24' },
-    { t: 574.79, key: 'cmd25' }, { t: 599.39, key: 'cmd26' }, { t: 620.59, key: 'cmd27' },
-    { t: 642.34, key: 'cmd28' }, { t: 676.03, key: 'cmd29' }, { t: 699.19, key: 'cmd30' },
-    { t: 720.75, key: 'cmd31' }, { t: 743.29, key: 'cmd32' }
+    { t: 42.76, key: 'cmd1' }, { t: 61.33, key: 'cmd2' }, { t: 80.58, key: 'cmd3' },
+    { t: 99.23, key: 'cmd4' }, { t: 117.93, key: 'cmd5' }, { t: 136.68, key: 'cmd6' },
+    { t: 155.44, key: 'cmd7' }, { t: 179.62, key: 'cmd8' }, { t: 198.79, key: 'cmd9' },
+    { t: 217.96, key: 'cmd10' }, { t: 237.79, key: 'cmd11' }, { t: 256.12, key: 'cmd12' },
+    { t: 275.53, key: 'cmd13' }, { t: 297.71, key: 'cmd14' }, { t: 316.04, key: 'cmd15' },
+    { t: 335.16, key: 'cmd16' }, { t: 353.39, key: 'cmd17' }, { t: 372.61, key: 'cmd18' },
+    { t: 391.97, key: 'cmd19' }, { t: 410.54, key: 'cmd20' }, { t: 431.22, key: 'cmd21' },
+    { t: 450.89, key: 'cmd22' }, { t: 470.66, key: 'cmd23' }, { t: 489.05, key: 'cmd24' },
+    { t: 507.70, key: 'cmd25' }, { t: 529.61, key: 'cmd26' }, { t: 548.13, key: 'cmd27' },
+    { t: 567.20, key: 'cmd28' }, { t: 598.20, key: 'cmd29' }, { t: 618.68, key: 'cmd30' },
+    { t: 637.56, key: 'cmd31' }, { t: 657.41, key: 'cmd32' }
   ];
 
-  var ROLE_REVEAL_TIME = 745.87; // 12:25.87 — same fixed moment for everyone, role-specific audio
+  var ROLE_REVEAL_TIME = 660.00; // 11:00 — same fixed moment for everyone, role-specific audio
 
   // FILLER entries are resolved at playback time: a coin flip between the
   // 5-clip shared pool and this role's own single filler clip.
   var ROLE_SCHEDULES = {
     'housekeeper': [
-      { t: 805.87, key: 'w34a' }, { t: 812.87, key: 'w34b' },
-      { t: 850.33, key: 'FILLER' },
-      { t: 881.64, key: 'w35a' }, { t: 888.64, key: 'w35b' }, { t: 895.64, key: 'w35c' },
-      { t: 930.70, key: 'FILLER' },
-      { t: 962.01, key: 'w36a' }, { t: 969.01, key: 'w36b' },
-      { t: 1003.59, key: 'FILLER' },
-      { t: 1034.90, key: 'w37a' }, { t: 1041.90, key: 'w37b' }, { t: 1048.90, key: 'w37c' },
-      { t: 1083.35, key: 'FILLER' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 776.52, key: 'FILLER' },
+      { t: 817.91, key: 'w35a' }, { t: 824.91, key: 'w35b' }, { t: 831.91, key: 'w35c' },
+      { t: 878.25, key: 'FILLER' },
+      { t: 919.64, key: 'w36a' }, { t: 926.64, key: 'w36b' },
+      { t: 972.35, key: 'FILLER' },
+      { t: 1013.74, key: 'w37a' }, { t: 1020.74, key: 'w37b' }, { t: 1027.74, key: 'w37c' },
+      { t: 1073.27, key: 'FILLER' }
     ],
     'food-provider': [
-      { t: 805.87, key: 'w34a' }, { t: 812.87, key: 'w34b' },
-      { t: 848.08, key: 'FILLER' },
-      { t: 880.54, key: 'w35a' }, { t: 887.54, key: 'w35b' }, { t: 894.54, key: 'w35c' },
-      { t: 933.52, key: 'FILLER' },
-      { t: 965.99, key: 'w36a' }, { t: 972.99, key: 'w36b' },
-      { t: 1007.63, key: 'FILLER' },
-      { t: 1040.09, key: 'w37a' }, { t: 1047.09, key: 'w37b' },
-      { t: 1082.19, key: 'FILLER' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 773.25, key: 'FILLER' },
+      { t: 815.90, key: 'w35a' }, { t: 822.90, key: 'w35b' }, { t: 829.90, key: 'w35c' },
+      { t: 881.10, key: 'FILLER' },
+      { t: 923.75, key: 'w36a' }, { t: 930.75, key: 'w36b' },
+      { t: 976.26, key: 'FILLER' },
+      { t: 1018.90, key: 'w37a' }, { t: 1025.90, key: 'w37b' },
+      { t: 1072.01, key: 'FILLER' }
     ],
     'maker': [
-      { t: 805.87, key: 'w34a' }, { t: 812.87, key: 'w34b' },
-      { t: 847.42, key: 'FILLER' },
-      { t: 878.97, key: 'w35a' }, { t: 885.97, key: 'w35b' },
-      { t: 919.82, key: 'FILLER' },
-      { t: 951.36, key: 'w36a' }, { t: 958.36, key: 'w36b' }, { t: 965.36, key: 'w36c' }, { t: 972.36, key: 'w36d' },
-      { t: 1009.96, key: 'FILLER' },
-      { t: 1041.51, key: 'w37a' }, { t: 1048.51, key: 'w37b' },
-      { t: 1083.11, key: 'FILLER' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 772.67, key: 'FILLER' },
+      { t: 814.38, key: 'w35a' }, { t: 821.38, key: 'w35b' },
+      { t: 866.12, key: 'FILLER' },
+      { t: 907.82, key: 'w36a' }, { t: 914.82, key: 'w36b' }, { t: 921.82, key: 'w36c' }, { t: 928.82, key: 'w36d' },
+      { t: 978.52, key: 'FILLER' },
+      { t: 1020.22, key: 'w37a' }, { t: 1027.22, key: 'w37b' },
+      { t: 1072.96, key: 'FILLER' }
     ],
     'memory-keeper': [
-      { t: 805.87, key: 'w34a' }, { t: 812.87, key: 'w34b' },
-      { t: 850.49, key: 'FILLER' },
-      { t: 884.79, key: 'w35a' },
-      { t: 921.92, key: 'FILLER' },
-      { t: 956.23, key: 'w36a' }, { t: 963.23, key: 'w36b' },
-      { t: 1001.03, key: 'FILLER' },
-      { t: 1035.33, key: 'w37a' }, { t: 1042.33, key: 'w37b' },
-      { t: 1080.35, key: 'FILLER' }
+      { t: 720.00, key: 'w34a' }, { t: 727.00, key: 'w34b' },
+      { t: 775.84, key: 'FILLER' },
+      { t: 820.38, key: 'w35a' },
+      { t: 868.59, key: 'FILLER' },
+      { t: 913.14, key: 'w36a' }, { t: 920.14, key: 'w36b' },
+      { t: 969.21, key: 'FILLER' },
+      { t: 1013.75, key: 'w37a' }, { t: 1020.75, key: 'w37b' },
+      { t: 1070.11, key: 'FILLER' }
     ]
   };
 
