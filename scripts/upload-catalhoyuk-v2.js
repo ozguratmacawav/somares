@@ -1,6 +1,6 @@
-// Bulk-uploads the revised Çatalhöyük content ("YENİ GÜNCEL SESLER", 81
-// files): 32 shared commands (some still missing — flagged, not fatal),
-// per-role asymmetric work, retreat, and the two-tier filler system
+// Bulk-uploads the revised Çatalhöyük content ("YENİ GÜNCEL SESLER", 85
+// files): all 32 shared commands, per-role asymmetric work, retreat, and
+// the two-tier filler system
 // (5 general + 1 role-specific each). Deletes the old whisper-layer
 // content first (this replaces it entirely) but leaves the ambience
 // background row untouched. Safe to re-run.
@@ -102,8 +102,12 @@ async function main() {
     console.log('  whisper /', role, '/', key);
   }
 
-  // --- 1-32 shared block (22, 24, 26, 30 not yet recorded) ---
-  const SHARED_NUMBERS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,25,27,28,29,31,32];
+  // --- intro (kept from the original recording, not part of the re-record) ---
+  const INTRO_PATH = path.join(__dirname, '..', 'Somares-Çatalhöyük', 'Komutlar', '1-9 Komutlar', 'baslangicmesajı.mp3');
+  await uploadOne('shared', 'intro', fs.existsSync(INTRO_PATH) ? INTRO_PATH : null, 'catalhoyuk2/shared');
+
+  // --- 1-32 shared block ---
+  const SHARED_NUMBERS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32];
   for (const n of SHARED_NUMBERS) {
     const prefix = (n < 10 ? '0' + n : String(n)) + '-';
     const f = findOne('1-32 ORTAK', prefix, 'cmd' + n);

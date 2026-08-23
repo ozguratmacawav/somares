@@ -22,7 +22,7 @@ node_modules/
 
 # Source audio files — already uploaded to Vercel Blob via scripts/upload-catalhoyuk-v2.js
 /YENİ GÜNCEL SESLER/
-/Somares_GeriCekilme ve Boşluk Doldurma/
+/Somares_GeriCekilme*/
 
 .env*
 
