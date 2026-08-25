@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET') {
       const result = await pool.query(`
         SELECT participant_code, first_name, last_name, venue, role,
-               group_index, position_in_group, created_at, last_seen_at
+               session_code, position_in_group, created_at, last_seen_at
         FROM registrations
         ORDER BY created_at DESC
         LIMIT 500;

@@ -93,6 +93,21 @@
     border-radius:6px; padding:3px 9px; cursor:pointer; font-size:12px;
   }
 
+  #sessionList{ display:flex; flex-direction:column; gap:8px; }
+  .sessionRow{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.02);
+    border:1px solid var(--border); cursor:pointer; transition:background 0.15s ease, border-color 0.15s ease;
+  }
+  .sessionRow:hover{ background:rgba(255,255,255,0.06); }
+  .sessionRow.selected{ border-color:var(--amber); background:rgba(212,162,86,0.08); }
+  .sessionRow .sessionCode{ font-weight:700; letter-spacing:0.08em; color:var(--amber-light); }
+  .sessionRow .sessionMeta{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .sessionRow .sessionState{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; padding:3px 9px; border-radius:20px; }
+  .sessionState.open{ color:var(--green); background:rgba(127,216,143,0.12); }
+  .sessionState.running{ color:var(--amber-light); background:rgba(212,162,86,0.12); }
+  .sessionState.ended{ color:var(--text-dim); background:rgba(255,255,255,0.06); }
+
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
     background:var(--panel); border:1px solid var(--border); color:var(--text);
@@ -115,25 +130,30 @@
 
 <div id="dashboard">
   <h1>Conductor</h1>
-  <p class="sub">Çatalhöyük home experience — nothing here is triggered live; this is an observer view of the pre-scheduled playback running on each phone.</p>
+  <p class="sub">Çatalhöyük experience — nothing here is triggered live; this is an observer view of the pre-scheduled playback running on each phone. Each group runs its own independent session.</p>
 
   <div class="panel">
+    <h2>Sessions <span class="joinNote" id="sessionListNote"></span></h2>
+    <div id="sessionList"></div>
+  </div>
+
+  <div class="panel" id="sessionDetailPanel" style="display:none;">
     <div class="clockRow">
       <div>
         <div class="clock" id="clockEl">0:00</div>
         <div class="statusLine" id="statusLine">Not started</div>
       </div>
-      <button class="btn danger" id="resetBtn">Reset Session</button>
+      <button class="btn danger" id="resetBtn">Reset This Group</button>
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="participantsPanel" style="display:none;">
     <h2>Participants <span class="joinNote" id="joinNote"></span></h2>
     <div class="roleGrid" id="roleGrid"></div>
   </div>
 
-  <div class="panel">
-    <h2>Registrations <span class="joinNote">— clear out old test entries before a real session</span></h2>
+  <div class="panel" id="regPanel" style="display:none;">
+    <h2>Registrations <span class="joinNote">— for the selected session</span></h2>
     <div id="regList"></div>
   </div>
 </div>
@@ -252,7 +272,7 @@
     }
     unlockBtn.disabled = true;
     adminKey = key;
-    api('/api/admin/presence?venue=' + encodeURIComponent(VENUE))
+    api('/api/admin/experience?venue=' + encodeURIComponent(VENUE))
       .then(function(){
         unlocked = true;
         sessionStorage.setItem('somares_admin_key', key);
@@ -281,7 +301,12 @@
     setTimeout(function(){ toast.classList.remove('show'); }, 1800);
   }
 
-  /* ---------- Session status + clock ---------- */
+  /* ---------- Session picker ---------- */
+  var sessionList = document.getElementById('sessionList');
+  var sessionListNote = document.getElementById('sessionListNote');
+  var sessionDetailPanel = document.getElementById('sessionDetailPanel');
+  var participantsPanel = document.getElementById('participantsPanel');
+  var regPanel = document.getElementById('regPanel');
   var clockEl = document.getElementById('clockEl');
   var statusLine = document.getElementById('statusLine');
   var resetBtn = document.getElementById('resetBtn');
@@ -289,15 +314,82 @@
   var roleGrid = document.getElementById('roleGrid');
   var regList = document.getElementById('regList');
 
+  var selectedCode = null;
   var startedAtMs = null;
+  var allSessions = [];
+
+  function sessionState(s){
+    if (!s.startedAt) return 'open';
+    var elapsed = (Date.now() - new Date(s.startedAt).getTime()) / 1000;
+    return elapsed >= EXPERIENCE_END ? 'ended' : 'running';
+  }
+
+  function renderSessionList(){
+    sessionList.innerHTML = '';
+    if (!allSessions.length){
+      sessionList.innerHTML = '<div class="joinNote">No sessions yet.</div>';
+      sessionListNote.textContent = '';
+      return;
+    }
+    sessionListNote.textContent = '— ' + allSessions.length + ' total';
+    allSessions.forEach(function(s){
+      var row = document.createElement('div');
+      row.className = 'sessionRow' + (s.sessionCode === selectedCode ? ' selected' : '');
+      row.addEventListener('click', function(){ selectSession(s.sessionCode); });
+
+      var left = document.createElement('div');
+      var codeEl = document.createElement('div');
+      codeEl.className = 'sessionCode';
+      codeEl.textContent = s.sessionCode;
+      left.appendChild(codeEl);
+      var meta = document.createElement('div');
+      meta.className = 'sessionMeta';
+      meta.textContent = s.memberCount + ' / 4 joined · created ' + timeAgo(s.createdAt);
+      left.appendChild(meta);
+      row.appendChild(left);
+
+      var state = sessionState(s);
+      var stateEl = document.createElement('div');
+      stateEl.className = 'sessionState ' + state;
+      stateEl.textContent = state === 'open' ? 'Open' : (state === 'running' ? 'Running' : 'Ended');
+      row.appendChild(stateEl);
+
+      sessionList.appendChild(row);
+    });
+  }
+
+  function timeAgo(iso){
+    var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+    if (s < 60) return s + 's ago';
+    var m = Math.round(s / 60);
+    if (m < 60) return m + 'm ago';
+    return Math.round(m / 60) + 'h ago';
+  }
+
+  function selectSession(code){
+    selectedCode = code;
+    sessionDetailPanel.style.display = 'block';
+    participantsPanel.style.display = 'block';
+    regPanel.style.display = 'block';
+    renderSessionList();
+    refreshAll();
+  }
 
   resetBtn.addEventListener('click', function(){
-    if (!confirm('Reset the session? This clears the shared clock AND un-registers everyone — all 4 roles become free again, and anyone who wants back in has to rejoin from the start.')) return;
+    if (!selectedCode) return;
+    if (!confirm('Reset group ' + selectedCode + '? This clears its clock AND un-registers all its participants — the group is gone, everyone has to create or join a new one.')) return;
     api('/api/admin/experience', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venue: VENUE, action: 'reset' })
-    }).then(function(){ showToast('Session reset — everyone un-registered'); refreshAll(); }).catch(function(){ showToast('Failed to reset'); });
+      body: JSON.stringify({ sessionCode: selectedCode, action: 'reset' })
+    }).then(function(){
+      showToast('Group ' + selectedCode + ' reset');
+      selectedCode = null;
+      sessionDetailPanel.style.display = 'none';
+      participantsPanel.style.display = 'none';
+      regPanel.style.display = 'none';
+      refreshAll();
+    }).catch(function(){ showToast('Failed to reset'); });
   });
 
   function renderClock(){
@@ -320,8 +412,9 @@
   }
   setInterval(renderClock, 500);
 
-  function refreshVenueState(){
-    return fetch('/api/venue-state?venue=' + encodeURIComponent(VENUE))
+  function refreshSelectedState(){
+    if (!selectedCode) return Promise.resolve();
+    return fetch('/api/venue-state?sessionCode=' + encodeURIComponent(selectedCode))
       .then(function(r){ return r.json(); })
       .then(function(data){
         startedAtMs = data.startedAt ? new Date(data.startedAt).getTime() : null;
@@ -419,7 +512,7 @@
 
   function renderRegistrations(registrations){
     regList.innerHTML = '';
-    var mine = registrations.filter(function(r){ return r.venue === VENUE; });
+    var mine = registrations.filter(function(r){ return r.session_code === selectedCode; });
     if (!mine.length){
       regList.innerHTML = '<div class="joinNote">No registrations yet.</div>';
       return;
@@ -441,8 +534,16 @@
 
   /* ---------- Polling ---------- */
   function refreshAll(){
-    refreshVenueState().then(function(){
-      return api('/api/admin/presence?venue=' + encodeURIComponent(VENUE));
+    api('/api/admin/experience?venue=' + encodeURIComponent(VENUE))
+      .then(function(data){
+        allSessions = data.sessions || [];
+        renderSessionList();
+      }).catch(function(){});
+
+    if (!selectedCode) return;
+
+    refreshSelectedState().then(function(){
+      return api('/api/admin/presence?sessionCode=' + encodeURIComponent(selectedCode));
     }).then(function(data){
       renderRoles(data.people || []);
     }).catch(function(){});

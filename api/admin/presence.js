@@ -14,15 +14,15 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { venue } = req.query;
-  if (!venue) {
-    res.status(400).json({ error: 'venue is required' });
+  const { sessionCode } = req.query;
+  if (!sessionCode) {
+    res.status(400).json({ error: 'sessionCode is required' });
     return;
   }
 
   try {
     await ensureSchema();
-    const rows = await listPresence(venue);
+    const rows = await listPresence(String(sessionCode).trim().toUpperCase());
     const now = Date.now();
     const people = rows.map((r) => ({
       participantCode: r.participant_code,

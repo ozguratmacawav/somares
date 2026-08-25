@@ -242,6 +242,78 @@
     margin-top:10px;
   }
 
+  .groupList{
+    margin:18px 0 8px;
+    text-align:left;
+  }
+  .groupListLabel{
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--silver-dim);
+    margin-bottom:10px;
+  }
+  .groupRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:11px 14px;
+    margin-bottom:8px;
+    border-radius:12px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.1);
+  }
+  .groupRow .groupLabel{
+    font-size:13.5px;
+    color:var(--text);
+  }
+  .groupRow .groupLabel b{ color:var(--amber-light); letter-spacing:0.06em; }
+  .groupRow .groupCount{ display:block; font-size:11px; color:var(--text-dim); margin-top:2px; }
+  button.joinGroupBtn{
+    padding:8px 16px;
+    font-size:12.5px;
+    font-weight:600;
+    color:#1a1006;
+    background:linear-gradient(135deg,var(--amber-light),var(--bronze));
+    border:none;
+    border-radius:9px;
+    cursor:pointer;
+    font-family:inherit;
+    flex-shrink:0;
+  }
+  button.joinGroupBtn:disabled{ opacity:0.5; cursor:default; }
+
+  .orDivider{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:16px 0 4px;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--silver-dim);
+  }
+  .orDivider::before, .orDivider::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:rgba(255,255,255,0.1);
+  }
+
+  .groupCodeLine{
+    margin-top:10px;
+    font-size:12px;
+    letter-spacing:0.08em;
+    color:var(--text-dim);
+  }
+  .groupCodeLine b{
+    color:var(--amber-light);
+    font-size:15px;
+    letter-spacing:0.16em;
+    font-weight:700;
+  }
+
   .confirm{
     display:none;
     width:100%;
@@ -412,9 +484,16 @@
     <div class="field">
       <input type="text" id="lastName" placeholder="Last Name" autocomplete="family-name" required>
     </div>
-    <button type="submit" class="submit" id="submitBtn">Join</button>
+
+    <div class="groupList" id="groupList" style="display:none;">
+      <div class="groupListLabel">Open Groups</div>
+      <div id="groupRows"></div>
+    </div>
+
+    <div class="orDivider" id="orDivider" style="display:none;">or</div>
+
+    <button type="submit" class="submit" id="submitBtn">Create New Group</button>
     <p class="form-message" id="formMessage"></p>
-    <button type="button" class="submit secondary" id="newSessionBtn" style="display:none;">Start New Session</button>
   </form>
 
   <div class="confirm" id="confirmBox">
@@ -426,6 +505,7 @@
     <h2>You're Ready</h2>
     <p>Put on your headphones. You'll need at least 4 people. When everyone is ready, anyone can start.</p>
     <div class="pid">Participant No <span id="pidValue">—</span></div>
+    <div class="groupCodeLine">Group code: <b id="groupCodeValue">—</b></div>
     <div class="joinCount" id="joinCount">1 joined</div>
     <button class="submit" id="startBtn">Start for Everyone</button>
   </div>
@@ -729,7 +809,7 @@
     var bufferCache = {};
     var wakeLock = null;
 
-    var venue = null, role = null, participantCode = null;
+    var venue = null, role = null, participantCode = null, sessionCode = null;
     var manifest = null;
     var schedule = [];
     var playedIndex = []; // parallel to `schedule`, by position (not by key — FILLER repeats)
@@ -841,11 +921,12 @@
 
     // Loads every buffer this participant's role needs — background,
     // shared, own, filler pool — before the waiting room ever offers Start.
-    function prepare(manifestData, venueKey, roleKey, participantCodeVal){
+    function prepare(manifestData, venueKey, roleKey, participantCodeVal, sessionCodeVal){
       manifest = manifestData;
       venue = venueKey;
       role = roleKey;
       participantCode = participantCodeVal;
+      sessionCode = sessionCodeVal;
       schedule = scheduleForRole(role);
 
       var jobs = [];
@@ -885,7 +966,7 @@
       fetch('/api/venue-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venue: venue, action: 'report', code: participantCode, clip: clipKey })
+        body: JSON.stringify({ sessionCode: sessionCode, action: 'report', code: participantCode, clip: clipKey })
       }).catch(function(){});
     }
 
@@ -965,7 +1046,7 @@
       return fetch('/api/venue-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venue: venue, action: 'start' })
+        body: JSON.stringify({ sessionCode: sessionCode, action: 'start' })
       }).then(function(r){ return r.json(); });
     }
 
@@ -973,8 +1054,8 @@
     // any other) and the live join count.
     function pollForStart(onJoinCount){
       var timer = setInterval(function(){
-        if (!venue || !participantCode) return; // prepare() hasn't set these yet (slow manifest fetch) — skip this tick
-        fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&code=' + encodeURIComponent(participantCode))
+        if (!sessionCode || !participantCode) return; // prepare() hasn't set these yet (slow manifest fetch) — skip this tick
+        fetch('/api/venue-state?sessionCode=' + encodeURIComponent(sessionCode) + '&code=' + encodeURIComponent(participantCode))
           .then(function(r){ return r.json(); })
           .then(function(data){
             if (onJoinCount) onJoinCount(data.joined, data.groupSize);
@@ -992,7 +1073,7 @@
     // to pick up an operator's rare "force resync" request.
     function pollDuringExperience(){
       setInterval(function(){
-        fetch('/api/venue-state?venue=' + encodeURIComponent(venue) + '&code=' + encodeURIComponent(participantCode))
+        fetch('/api/venue-state?sessionCode=' + encodeURIComponent(sessionCode) + '&code=' + encodeURIComponent(participantCode))
           .then(function(r){ return r.json(); })
           .then(function(data){
             if (data.forceResyncAt && data.forceResyncAt !== lastHandledResync){
@@ -1024,14 +1105,18 @@
   })();
 
   /* ---------- Registration form ---------- */
+  var VENUE = 'catalhoyuk-home';
   var form = document.getElementById('registerForm');
   var submitBtn = document.getElementById('submitBtn');
   var formMessage = document.getElementById('formMessage');
-  var newSessionBtn = document.getElementById('newSessionBtn');
+  var groupList = document.getElementById('groupList');
+  var groupRows = document.getElementById('groupRows');
+  var orDivider = document.getElementById('orDivider');
   var confirmBox = document.getElementById('confirmBox');
   var playerBox = document.getElementById('playerBox');
   var muteBtn = document.getElementById('muteBtn');
   var pidValue = document.getElementById('pidValue');
+  var groupCodeValue = document.getElementById('groupCodeValue');
   var joinCount = document.getElementById('joinCount');
   var startBtn = document.getElementById('startBtn');
   var listeningText = document.getElementById('listeningText');
@@ -1045,8 +1130,9 @@
     listeningText.textContent = 'The experience has ended. Thank you.';
   });
 
-  function showWaitingRoom(participantCode){
+  function showWaitingRoom(participantCode, sessionCode){
     pidValue.textContent = participantCode;
+    groupCodeValue.textContent = sessionCode;
     form.style.opacity = '0';
     form.style.transform = 'translateY(-10px)';
     setTimeout(function(){
@@ -1063,50 +1149,76 @@
     }, 500);
   }
 
-  function showError(){
+  function resetSubmitBtn(){
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Join';
+    submitBtn.textContent = 'Create New Group';
+  }
+
+  function showError(){
+    resetSubmitBtn();
     submitBtn.classList.add('shake');
     setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
   }
 
-  // Registration is closed (already started, or the group's 4 slots are
-  // full) — this disables Join and offers a way to clear it and begin a
-  // separate session, rather than a dead end only an operator can fix.
-  function showFormBlocked(buttonText, message){
-    submitBtn.disabled = true;
-    submitBtn.textContent = buttonText;
+  // A join attempt can lose a race (someone else took the last slot, or
+  // started the group, a moment before this request landed) — not a dead
+  // end like the old single-session lockout, just stale info. Show why and
+  // refresh the list so they can pick another group or create one.
+  function showJoinFailed(message){
     formMessage.textContent = message;
     formMessage.classList.add('show');
-    newSessionBtn.style.display = 'block';
+    setTimeout(function(){ formMessage.classList.remove('show'); }, 4000);
+    loadOpenGroups();
   }
 
-  newSessionBtn.addEventListener('click', function(){
-    newSessionBtn.disabled = true;
-    newSessionBtn.textContent = 'Starting new session…';
-    fetch('/api/venue-state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venue: 'catalhoyuk-home', action: 'startNewSession' })
-    }).then(function(){
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Join';
-      formMessage.classList.remove('show');
-      newSessionBtn.style.display = 'none';
-      newSessionBtn.disabled = false;
-      newSessionBtn.textContent = 'Start New Session';
-    }).catch(function(){
-      newSessionBtn.disabled = false;
-      newSessionBtn.textContent = 'Start New Session';
+  function renderGroupRows(sessions, groupSize){
+    groupRows.innerHTML = '';
+    if (!sessions.length){
+      groupList.style.display = 'none';
+      orDivider.style.display = 'none';
+      return;
+    }
+    groupList.style.display = 'block';
+    orDivider.style.display = 'flex';
+    sessions.forEach(function(s){
+      var row = document.createElement('div');
+      row.className = 'groupRow';
+
+      var label = document.createElement('div');
+      label.className = 'groupLabel';
+      label.innerHTML = 'Group <b>' + s.sessionCode + '</b><span class="groupCount">' + s.memberCount + ' / ' + groupSize + ' joined</span>';
+      row.appendChild(label);
+
+      var joinBtn = document.createElement('button');
+      joinBtn.type = 'button';
+      joinBtn.className = 'joinGroupBtn';
+      joinBtn.textContent = 'Join';
+      joinBtn.addEventListener('click', function(){ submitRegistration(s.sessionCode, joinBtn, 'Joining…'); });
+      row.appendChild(joinBtn);
+
+      groupRows.appendChild(row);
     });
-  });
+  }
 
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
+  var groupListTimer = null;
+  function loadOpenGroups(){
+    fetch('/api/venue-state?venue=' + encodeURIComponent(VENUE))
+      .then(function(r){ return r.json(); })
+      .then(function(data){ renderGroupRows(data.sessions || [], data.groupSize || 4); })
+      .catch(function(){});
+  }
+  loadOpenGroups();
+  groupListTimer = setInterval(loadOpenGroups, 5000);
 
+  function submitRegistration(sessionCodeToJoin, triggerBtn, busyText){
     var firstName = document.getElementById('firstName').value.trim();
     var lastName = document.getElementById('lastName').value.trim();
-    if (!firstName || !lastName) return;
+    if (!firstName || !lastName) {
+      formMessage.textContent = 'Enter your first and last name first.';
+      formMessage.classList.add('show');
+      setTimeout(function(){ formMessage.classList.remove('show'); }, 3000);
+      return;
+    }
 
     // Unlock audio + request the wake lock synchronously, in direct
     // response to this tap — before any network/async work — so mobile
@@ -1114,22 +1226,24 @@
     Engine.unlock();
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Connecting…';
+    triggerBtn.disabled = true;
+    var originalText = triggerBtn.textContent;
+    triggerBtn.textContent = busyText;
 
     fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: firstName, lastName: lastName })
+      body: JSON.stringify({ firstName: firstName, lastName: lastName, sessionCode: sessionCodeToJoin || undefined })
     })
       .then(function(r){
-        if (r.status === 409) { return r.json().then(function(body){ throw { blocked: true, reason: body.error }; }); }
-        if (!r.ok) throw new Error('registration failed');
+        if (!r.ok) { return r.json().then(function(body){ throw { blocked: true, reason: body.error, message: body.message }; }); }
         return r.json();
       })
       // The role is used only to fetch this participant's own audio — the
-      // UI never displays it, so it stays secret until command 10 speaks it.
+      // UI never displays it, so it stays secret until command 33.
       .then(function(data){
-        showWaitingRoom(data.participantCode);
+        if (groupListTimer) { clearInterval(groupListTimer); groupListTimer = null; }
+        showWaitingRoom(data.participantCode, data.sessionCode);
 
         // Join-count polling and audio preloading run in parallel — no
         // reason to make people wait to see who else has joined just
@@ -1142,21 +1256,27 @@
         startBtn.textContent = 'Preparing…';
         return fetch('/api/audio-manifest?venue=' + encodeURIComponent(data.venue) + '&role=' + encodeURIComponent(data.role))
           .then(function(r){ return r.json(); })
-          .then(function(manifest){ return Engine.prepare(manifest, data.venue, data.role, data.participantCode); })
+          .then(function(manifest){ return Engine.prepare(manifest, data.venue, data.role, data.participantCode, data.sessionCode); })
           .then(function(){
             startBtn.disabled = false;
             startBtn.textContent = 'Start for Everyone';
           });
       })
       .catch(function(err){
-        if (err && err.blocked && err.reason === 'already-started') {
-          showFormBlocked('Already started', 'The experience has already started for this group. Please check with the person running the session.');
-        } else if (err && err.blocked && err.reason === 'group-full') {
-          showFormBlocked('Group is full', 'This group already has all 4 participants. Please check with the person running the session.');
+        submitBtn.disabled = false;
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = originalText;
+        if (err && err.blocked) {
+          showJoinFailed(err.message || 'That group is no longer available.');
         } else {
           showError();
         }
       });
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    submitRegistration(null, submitBtn, 'Creating…');
   });
 
   startBtn.addEventListener('click', function(){

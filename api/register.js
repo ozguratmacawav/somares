@@ -1,5 +1,5 @@
-const { ensureSchema, getVenueState, countAllRegistrations, nextVenueCount, insertRegistration } = require('../lib/db');
-const { assignRole, GROUP_SIZE } = require('../lib/roles');
+const { ensureSchema, createSession, getSession, joinSession, insertRegistration } = require('../lib/db');
+const { assignRole } = require('../lib/roles');
 
 const VENUE = 'catalhoyuk-home';
 
@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { firstName, lastName } = req.body || {};
+  const { firstName, lastName, sessionCode } = req.body || {};
 
   if (!firstName || !String(firstName).trim() || !lastName || !String(lastName).trim()) {
     res.status(400).json({ error: 'firstName and lastName are required' });
@@ -23,20 +23,49 @@ module.exports = async (req, res) => {
   try {
     await ensureSchema();
 
-    const venueState = await getVenueState(VENUE);
-    if (venueState.startedAt) {
-      res.status(409).json({ error: 'already-started', message: 'The experience has already started for this group.' });
+    let code = sessionCode ? String(sessionCode).trim().toUpperCase() : null;
+
+    if (code) {
+      // Joining an existing group. joinSession is the single atomic check
+      // (exists, not full, not started) — figure out which one failed only
+      // to give a precise error message back to the client.
+      const claim = await joinSession(code);
+      if (!claim) {
+        const existing = await getSession(code);
+        if (!existing) {
+          res.status(404).json({ error: 'not-found', message: 'No group found with that code.' });
+          return;
+        }
+        if (existing.startedAt) {
+          res.status(409).json({ error: 'already-started', message: 'This group has already started.' });
+          return;
+        }
+        res.status(409).json({ error: 'group-full', message: 'This group is already full (4/4).' });
+        return;
+      }
+
+      const { role } = assignRole(VENUE, code, claim.positionInGroup);
+      const participantCode = generateParticipantCode();
+
+      await insertRegistration({
+        participantCode,
+        firstName: String(firstName).trim(),
+        lastName: String(lastName).trim(),
+        venue: VENUE,
+        sessionCode: code,
+        role,
+        positionInGroup: claim.positionInGroup
+      });
+
+      res.status(200).json({ participantCode, role, venue: VENUE, sessionCode: code });
       return;
     }
 
-    const existing = await countAllRegistrations(VENUE);
-    if (existing >= GROUP_SIZE) {
-      res.status(409).json({ error: 'group-full', message: 'This group is already full (4/4).' });
-      return;
-    }
-
-    const count = await nextVenueCount(VENUE);          // 1-indexed
-    const { role, groupIndex, positionInGroup } = assignRole(VENUE, count - 1);
+    // No code given — create a brand-new, separate group. Guaranteed to
+    // succeed on the first join since it was just created empty.
+    code = await createSession(VENUE);
+    const claim = await joinSession(code);
+    const { role } = assignRole(VENUE, code, claim.positionInGroup);
     const participantCode = generateParticipantCode();
 
     await insertRegistration({
@@ -44,14 +73,14 @@ module.exports = async (req, res) => {
       firstName: String(firstName).trim(),
       lastName: String(lastName).trim(),
       venue: VENUE,
+      sessionCode: code,
       role,
-      groupIndex,
-      positionInGroup
+      positionInGroup: claim.positionInGroup
     });
 
     // Role is returned to the client for manifest routing, but the UI
-    // deliberately never displays it — it stays secret until command 10.
-    res.status(200).json({ participantCode, role, venue: VENUE });
+    // deliberately never displays it — it stays secret until command 33.
+    res.status(200).json({ participantCode, role, venue: VENUE, sessionCode: code });
   } catch (err) {
     console.error('registration failed', err);
     res.status(500).json({ error: 'Registration failed, please try again.' });

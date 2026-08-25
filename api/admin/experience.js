@@ -1,28 +1,42 @@
-const { ensureSchema, resetSession, requestResync } = require('../../lib/db');
+const { ensureSchema, listSessions, resetSessionByCode, requestResync } = require('../../lib/db');
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
   const key = req.headers['x-admin-key'];
   if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
-  const { venue, action } = req.body || {};
-
   try {
     await ensureSchema();
 
-    if (action === 'reset') {
+    // The conductor's session picker — every group for this venue, so the
+    // operator can pick which one to observe (there's no longer a single
+    // implicit "the" session).
+    if (req.method === 'GET') {
+      const { venue } = req.query;
       if (!venue) {
         res.status(400).json({ error: 'venue is required' });
         return;
       }
-      await resetSession(venue);
+      const sessions = await listSessions(venue);
+      res.status(200).json({ sessions });
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const { action, sessionCode } = req.body || {};
+
+    if (action === 'reset') {
+      if (!sessionCode) {
+        res.status(400).json({ error: 'sessionCode is required' });
+        return;
+      }
+      await resetSessionByCode(String(sessionCode).trim().toUpperCase());
       res.status(200).json({ ok: true });
       return;
     }

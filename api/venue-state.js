@@ -1,65 +1,87 @@
-const { ensureSchema, getVenueState, startSession, resetSession, reportProgress, touchLastSeen, countActiveRegistrations } = require('../lib/db');
-
-const GROUP_SIZE = 4;
+const {
+  ensureSchema, getSession, startSessionByCode, resetSessionByCode,
+  reportProgress, touchLastSeen, listOpenSessions, GROUP_SIZE
+} = require('../lib/db');
 
 const KNOWN_VENUES = new Set(['catalhoyuk-home']);
 
 module.exports = async (req, res) => {
-  const { venue } = req.method === 'GET' ? req.query : (req.body || {});
-
-  if (!venue || !KNOWN_VENUES.has(venue)) {
-    res.status(400).json({ error: 'a valid venue is required' });
-    return;
-  }
+  const isGet = req.method === 'GET';
+  const params = isGet ? req.query : (req.body || {});
+  const { venue, sessionCode } = params;
 
   try {
     await ensureSchema();
 
-    if (req.method === 'GET') {
-      const { code } = req.query;
-      const forceResyncAt = code ? await touchLastSeen(code) : null;
-      const state = await getVenueState(venue);
-      const joined = await countActiveRegistrations(venue);
+    if (isGet) {
+      // No session picked yet — this is the "which open groups can I join"
+      // list for the registration screen.
+      if (!sessionCode) {
+        if (!venue || !KNOWN_VENUES.has(venue)) {
+          res.status(400).json({ error: 'a valid venue is required' });
+          return;
+        }
+        const sessions = await listOpenSessions(venue);
+        res.status(200).json({ sessions, groupSize: GROUP_SIZE });
+        return;
+      }
+
+      // A specific session's state — used by the waiting room and by the
+      // in-experience heartbeat poll.
+      const code = String(sessionCode).trim().toUpperCase();
+      const { code: participantCode } = req.query;
+      const forceResyncAt = participantCode ? await touchLastSeen(participantCode) : null;
+      const session = await getSession(code);
+      if (!session) {
+        res.status(404).json({ error: 'not-found' });
+        return;
+      }
       res.status(200).json({
-        startedAt: state.startedAt,
-        fillerSchedule: state.fillerSchedule,
+        sessionCode: code,
+        startedAt: session.startedAt,
+        fillerSchedule: session.fillerSchedule,
         forceResyncAt,
-        joined,
+        joined: session.memberCount,
         groupSize: GROUP_SIZE
       });
       return;
     }
 
     if (req.method === 'POST') {
-      const { action, code, clip } = req.body || {};
-
-      // Any registered participant can start the shared clock — there's no
-      // live conductor in this experience, so whoever's ready taps it.
-      if (action === 'start') {
-        const state = await startSession(venue, 4);
-        res.status(200).json({ ok: true, startedAt: state.startedAt, fillerSchedule: state.fillerSchedule });
+      const { action, code: participantCode, clip } = req.body || {};
+      if (!sessionCode) {
+        res.status(400).json({ error: 'sessionCode is required' });
         return;
       }
+      const code = String(sessionCode).trim().toUpperCase();
 
-      // Deliberately unauthenticated, same trust model as 'start': there's
-      // no live conductor gating this experience, so any participant who
-      // finds the group stuck on a finished/abandoned session can clear it
-      // and begin a genuinely separate one — un-registering whoever (if
-      // anyone) is still on the old one.
-      if (action === 'startNewSession') {
-        await resetSession(venue);
-        res.status(200).json({ ok: true });
+      // Any registered participant can start their group's shared clock —
+      // there's no live conductor in this experience, so whoever's ready taps it.
+      if (action === 'start') {
+        const state = await startSessionByCode(code, 4);
+        if (!state) { res.status(404).json({ error: 'not-found' }); return; }
+        res.status(200).json({ ok: true, startedAt: state.startedAt, fillerSchedule: state.fillerSchedule });
         return;
       }
 
       // Lightweight heartbeat the client sends every ~10-15s — doubles as
       // presence and as the observer panel's live schedule-position feed.
       if (action === 'report') {
-        if (!code) {
+        if (!participantCode) {
           res.status(400).json({ error: 'code is required' });
           return;
         }
-        await reportProgress(code, clip || null);
+        await reportProgress(participantCode, clip || null);
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Deliberately unauthenticated, same trust model as 'start': there's
+      // no live conductor gating this experience. Scoped to exactly one
+      // session_code, so abandoning a stuck group can never affect any
+      // other group's in-progress experience.
+      if (action === 'reset') {
+        await resetSessionByCode(code);
         res.status(200).json({ ok: true });
         return;
       }
