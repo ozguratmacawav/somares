@@ -233,6 +233,14 @@
   }
   .form-message.show{ display:block; }
 
+  button.submit.secondary{
+    background:transparent;
+    color:#e8d9c0;
+    border:1px solid rgba(212,162,86,0.4);
+    box-shadow:none;
+    margin-top:10px;
+  }
+
   .confirm{
     display:none;
     width:100%;
@@ -405,6 +413,7 @@
     </div>
     <button type="submit" class="submit" id="submitBtn">Join</button>
     <p class="form-message" id="formMessage"></p>
+    <button type="button" class="submit secondary" id="newSessionBtn" style="display:none;">Start New Session</button>
   </form>
 
   <div class="confirm" id="confirmBox">
@@ -1017,6 +1026,7 @@
   var form = document.getElementById('registerForm');
   var submitBtn = document.getElementById('submitBtn');
   var formMessage = document.getElementById('formMessage');
+  var newSessionBtn = document.getElementById('newSessionBtn');
   var confirmBox = document.getElementById('confirmBox');
   var playerBox = document.getElementById('playerBox');
   var muteBtn = document.getElementById('muteBtn');
@@ -1059,15 +1069,36 @@
     setTimeout(function(){ submitBtn.classList.remove('shake'); }, 400);
   }
 
-  // Registration is permanently closed (already started, or the group's
-  // 4 slots are full) until an operator resets the session, so (unlike
-  // showError) this disables the form instead of inviting a retry.
+  // Registration is closed (already started, or the group's 4 slots are
+  // full) — this disables Join and offers a way to clear it and begin a
+  // separate session, rather than a dead end only an operator can fix.
   function showFormBlocked(buttonText, message){
     submitBtn.disabled = true;
     submitBtn.textContent = buttonText;
     formMessage.textContent = message;
     formMessage.classList.add('show');
+    newSessionBtn.style.display = 'block';
   }
+
+  newSessionBtn.addEventListener('click', function(){
+    newSessionBtn.disabled = true;
+    newSessionBtn.textContent = 'Starting new session…';
+    fetch('/api/venue-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venue: 'catalhoyuk-home', action: 'startNewSession' })
+    }).then(function(){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Join';
+      formMessage.classList.remove('show');
+      newSessionBtn.style.display = 'none';
+      newSessionBtn.disabled = false;
+      newSessionBtn.textContent = 'Start New Session';
+    }).catch(function(){
+      newSessionBtn.disabled = false;
+      newSessionBtn.textContent = 'Start New Session';
+    });
+  });
 
   form.addEventListener('submit', function(e){
     e.preventDefault();

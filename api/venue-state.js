@@ -1,4 +1,4 @@
-const { ensureSchema, getVenueState, startSession, reportProgress, touchLastSeen, countActiveRegistrations } = require('../lib/db');
+const { ensureSchema, getVenueState, startSession, resetSession, reportProgress, touchLastSeen, countActiveRegistrations } = require('../lib/db');
 
 const GROUP_SIZE = 4;
 
@@ -38,6 +38,17 @@ module.exports = async (req, res) => {
       if (action === 'start') {
         const state = await startSession(venue, 4);
         res.status(200).json({ ok: true, startedAt: state.startedAt, fillerSchedule: state.fillerSchedule });
+        return;
+      }
+
+      // Deliberately unauthenticated, same trust model as 'start': there's
+      // no live conductor gating this experience, so any participant who
+      // finds the group stuck on a finished/abandoned session can clear it
+      // and begin a genuinely separate one — un-registering whoever (if
+      // anyone) is still on the old one.
+      if (action === 'startNewSession') {
+        await resetSession(venue);
+        res.status(200).json({ ok: true });
         return;
       }
 
